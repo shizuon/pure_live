@@ -265,6 +265,8 @@ flutter_icons:
 # Flutter核心配置
 flutter:
   uses-material-design: true
+  config:
+    enable-swift-package-manager: false
   assets:
     - assets/
     - assets/images/

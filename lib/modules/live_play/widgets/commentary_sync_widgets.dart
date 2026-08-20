@@ -191,10 +191,6 @@ class CommentarySyncDialog extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   OutlinedButton(
-                    onPressed: state.isActive ? () => sync.adjustOffset(-10) : null,
-                    child: Text('${i18n('commentary_advance')} 10ms'),
-                  ),
-                  OutlinedButton(
                     onPressed: state.isActive ? () => sync.adjustOffset(-500) : null,
                     child: Text('${i18n('commentary_advance')} 500ms'),
                   ),
@@ -203,12 +199,16 @@ class CommentarySyncDialog extends StatelessWidget {
                     child: Text('${i18n('commentary_advance')} 100ms'),
                   ),
                   OutlinedButton(
-                    onPressed: state.isActive ? () => sync.adjustOffset(100) : null,
-                    child: Text('${i18n('commentary_delay')} 100ms'),
+                    onPressed: state.isActive ? () => sync.adjustOffset(-10) : null,
+                    child: Text('${i18n('commentary_advance')} 10ms'),
                   ),
                   OutlinedButton(
                     onPressed: state.isActive ? () => sync.adjustOffset(10) : null,
                     child: Text('${i18n('commentary_delay')} 10ms'),
+                  ),
+                  OutlinedButton(
+                    onPressed: state.isActive ? () => sync.adjustOffset(100) : null,
+                    child: Text('${i18n('commentary_delay')} 100ms'),
                   ),
                   OutlinedButton(
                     onPressed: state.isActive ? () => sync.adjustOffset(500) : null,
@@ -358,11 +358,6 @@ class CommentaryCalibrationPreview extends StatelessWidget {
                         runSpacing: 6,
                         children: [
                           _PreviewOffsetButton(
-                            label: '-10ms',
-                            enabled: state.isActive,
-                            onPressed: () => sync.adjustOffset(-10),
-                          ),
-                          _PreviewOffsetButton(
                             label: '-500ms',
                             enabled: state.isActive,
                             onPressed: () => sync.adjustOffset(-500),
@@ -373,14 +368,19 @@ class CommentaryCalibrationPreview extends StatelessWidget {
                             onPressed: () => sync.adjustOffset(-100),
                           ),
                           _PreviewOffsetButton(
-                            label: '+100ms',
+                            label: '-10ms',
                             enabled: state.isActive,
-                            onPressed: () => sync.adjustOffset(100),
+                            onPressed: () => sync.adjustOffset(-10),
                           ),
                           _PreviewOffsetButton(
                             label: '+10ms',
                             enabled: state.isActive,
                             onPressed: () => sync.adjustOffset(10),
+                          ),
+                          _PreviewOffsetButton(
+                            label: '+100ms',
+                            enabled: state.isActive,
+                            onPressed: () => sync.adjustOffset(100),
                           ),
                           _PreviewOffsetButton(
                             label: '+500ms',
@@ -510,7 +510,12 @@ class _CommentarySourceDialogState extends State<CommentarySourceDialog> {
 }
 
 String formatCommentaryOffset(int offsetMs) {
-  final seconds = offsetMs / 1000;
-  final prefix = offsetMs > 0 ? '+' : '';
-  return '$prefix${seconds.toStringAsFixed(1)}s';
+  if (offsetMs == 0) return '0.0s';
+  final absolute = offsetMs.abs();
+  final sign = offsetMs > 0 ? '+' : '-';
+  if (absolute < 1000 && absolute % 100 != 0) {
+    return '$sign${absolute}ms';
+  }
+  final decimals = absolute % 100 == 0 ? 1 : 2;
+  return '$sign${(absolute / 1000).toStringAsFixed(decimals)}s';
 }

@@ -26,6 +26,14 @@
     <string>$(PRODUCT_COPYRIGHT)</string>
     <key>NSMainNibFile</key>
     <string>MainMenu</string>
+    <!--
+      media_kit_video supplies SDR BGRA Flutter textures. On wide-gamut/HDR
+      displays Flutter's Impeller macOS surface uses BGRA10_XR; compositing two
+      live textures with the surrounding list UI can corrupt windowed frames.
+      Skia keeps the surface in sRGB/BGRA8 while retaining Metal acceleration.
+    -->
+    <key>FLTEnableImpeller</key>
+    <false/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>CFBundleURLName</key>

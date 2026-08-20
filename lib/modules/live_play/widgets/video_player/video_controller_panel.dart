@@ -12,6 +12,7 @@ import 'package:pure_live/common/utils/live_url_tool.dart';
 import 'package:pure_live/common/global/platform_utils.dart';
 import 'package:scrollview_observer/scrollview_observer.dart';
 import 'package:pure_live/modules/live_play/states/load_type.dart';
+import 'package:pure_live/modules/live_play/service/commentary_platform_support.dart';
 import 'package:pure_live/player/core/portrait_stream_support.dart';
 import 'package:pure_live/modules/live_play/dialogs/play_other.dart';
 import 'package:pure_live/modules/live_play/widgets/commentary_sync_widgets.dart';
@@ -51,14 +52,14 @@ List<TopActionTrailingSlot> resolveTopActionTrailingSlots({
   required bool fullscreen,
   required bool android,
   required bool windows,
-  bool macOS = false,
+  bool commentarySupported = false,
 }) {
   return <TopActionTrailingSlot>[
     if (fullscreen) TopActionTrailingSlot.roomHistory,
     if (fullscreen && !android) TopActionTrailingSlot.datetime,
     if (fullscreen && !android) TopActionTrailingSlot.battery,
     TopActionTrailingSlot.audioOnly,
-    if (macOS) TopActionTrailingSlot.commentary,
+    if (commentarySupported) TopActionTrailingSlot.commentary,
     if (android) TopActionTrailingSlot.cast,
     if (android || windows) TopActionTrailingSlot.pip,
   ];
@@ -186,8 +187,8 @@ class _VideoControllerPanelState extends State<VideoControllerPanel> {
                   child: BrightnessVolumnDargArea(controller: controller),
                 ),
                 LockButton(controller: controller),
-                if (Platform.isMacOS) CommentaryCalibrationPreview(controller: controller),
-                if (Platform.isMacOS) CommentarySyncBadge(controller: controller),
+                if (CommentaryPlatformSupport.isSupported) CommentaryCalibrationPreview(controller: controller),
+                if (CommentaryPlatformSupport.isSupported) CommentarySyncBadge(controller: controller),
                 TopActionBar(controller: controller, barHeight: barHeight),
                 BottomActionBar(controller: controller, barHeight: barHeight),
               ],
@@ -317,7 +318,7 @@ class TopActionBar extends StatelessWidget {
                 fullscreen: GlobalPlayerState.to.fullscreenUI,
                 android: PlatformUtils.isAndroid,
                 windows: PlatformUtils.isWindows,
-                macOS: Platform.isMacOS,
+                commentarySupported: CommentaryPlatformSupport.isSupported,
               ))
                 switch (slot) {
                   TopActionTrailingSlot.roomHistory => IconButton(

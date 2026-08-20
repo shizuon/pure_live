@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/modules/live_play/service/stream_source_resolver.dart';
 import 'package:pure_live/modules/live_play/service/commentary_sync_math.dart';
+import 'package:pure_live/modules/live_play/service/commentary_platform_support.dart';
 import 'package:pure_live/modules/live_play/states/commentary_sync_state.dart';
 import 'package:pure_live/player/core/live_audio_control_delegate.dart';
 import 'package:pure_live/player/core/player_manager.dart';
@@ -62,7 +62,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   final List<StreamSubscription<dynamic>> _companionSubscriptions = [];
   late final StreamSubscription<bool> _primaryLoadingSubscription;
 
-  bool get isSupported => Platform.isMacOS;
+  bool get isSupported => CommentaryPlatformSupport.isSupported;
   bool get isEngaged => state.value.isEngaged;
   bool get isActive => state.value.isActive;
   bool get isPlaying => primaryManager.isPlayingNow;
@@ -71,7 +71,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
 
   Future<void> activate({required LiveRoom videoRoom, required LiveRoom audioRoom, double? primaryVolume}) async {
     if (!isSupported) {
-      throw UnsupportedError('Commentary sync is only available on macOS');
+      throw UnsupportedError('Commentary sync is unavailable on this platform');
     }
     if (videoRoom == audioRoom) {
       throw StateError('Video and commentary rooms must be different');

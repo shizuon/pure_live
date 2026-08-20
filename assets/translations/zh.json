@@ -1471,7 +1471,7 @@
     "commentary_failed": "解说源不可用，已恢复原直播声音",
     "commentary_finish_calibration": "完成校准",
     "commentary_no_online_favorites": "关注列表中没有其他在线直播间",
-    "commentary_offset_help": "负数让声音提前，正数让声音延后；快捷键 [ / ] 可微调",
+    "commentary_offset_help": "负数让声音提前，正数让声音延后；[ / ] 调整 100ms，按住 Option/Alt 调整 10ms，按住 Shift 调整 500ms",
     "commentary_preview_help": "对照 A、B 画面时间戳",
     "commentary_preview_loading": "正在加载 B 画面…",
     "commentary_preview_title": "B 校准画面",

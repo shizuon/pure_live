@@ -1471,7 +1471,7 @@
     "commentary_failed": "Commentary unavailable; original audio restored",
     "commentary_finish_calibration": "Finish calibration",
     "commentary_no_online_favorites": "No other live rooms are online in Favorites",
-    "commentary_offset_help": "Negative advances audio; positive delays it. Use [ / ] for fine adjustment.",
+    "commentary_offset_help": "Negative advances audio; positive delays it. [ / ] adjusts 100ms, Option adjusts 10ms, and Shift adjusts 500ms.",
     "commentary_preview_help": "Compare timestamps in A and B",
     "commentary_preview_loading": "Loading B video…",
     "commentary_preview_title": "B calibration video",

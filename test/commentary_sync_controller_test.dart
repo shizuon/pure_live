@@ -40,24 +40,24 @@ void main() {
     expect(manager.lastVolume, 0);
     expect(companion.lastVolume, 0.6);
 
-    await controller.adjustOffset(100);
+    await controller.adjustOffset(10);
     expect(companion.pauseCount, 1, reason: 'positive offset delays B');
     expect(primary.pauseCount, 0);
 
-    await controller.adjustOffset(-200);
+    await controller.adjustOffset(-20);
     expect(primary.pauseCount, 1, reason: 'negative offset advances B');
-    expect(controller.state.value.offsetMs, -100);
+    expect(controller.state.value.offsetMs, -10);
 
     controller.finishCalibrationPreview();
     expect(controller.state.value.previewVisible, isFalse);
-    expect(controller.state.value.offsetMs, -100);
+    expect(controller.state.value.offsetMs, -10);
     controller.showCalibrationPreview();
     expect(
       controller.state.value.previewVisible,
       isTrue,
       reason: 'calibration can be reopened without losing the offset',
     );
-    expect(controller.state.value.offsetMs, -100);
+    expect(controller.state.value.offsetMs, -10);
 
     await controller.exit();
     expect(manager.lastVolume, 0.6);

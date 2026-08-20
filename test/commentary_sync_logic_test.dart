@@ -2,8 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pure_live/common/models/live_room.dart';
 import 'package:pure_live/model/live_play_quality.dart';
 import 'package:pure_live/modules/live_play/service/commentary_sync_math.dart';
+import 'package:pure_live/modules/live_play/service/commentary_platform_support.dart';
 import 'package:pure_live/modules/live_play/service/stream_source_resolver.dart';
 import 'package:pure_live/modules/live_play/states/commentary_sync_state.dart';
+import 'package:pure_live/modules/live_play/widgets/commentary_sync_widgets.dart';
 import 'package:pure_live/player/adapters/media_kit_adapter.dart';
 
 void main() {
@@ -57,6 +59,20 @@ void main() {
     const state = CommentarySyncState(status: CommentarySyncStatus.error);
     expect(state.isEngaged, isTrue);
     expect(state.isActive, isFalse);
+  });
+
+  test('ten millisecond offsets remain visible instead of rounding to zero', () {
+    expect(formatCommentaryOffset(10), '+10ms');
+    expect(formatCommentaryOffset(-10), '-10ms');
+    expect(formatCommentaryOffset(100), '+0.1s');
+    expect(formatCommentaryOffset(1010), '+1.01s');
+  });
+
+  test('migration allow-list includes macOS, Windows and iOS only', () {
+    expect(CommentaryPlatformSupport.supports(macOS: true, windows: false, iOS: false), isTrue);
+    expect(CommentaryPlatformSupport.supports(macOS: false, windows: true, iOS: false), isTrue);
+    expect(CommentaryPlatformSupport.supports(macOS: false, windows: false, iOS: true), isTrue);
+    expect(CommentaryPlatformSupport.supports(macOS: false, windows: false, iOS: false), isFalse);
   });
 
   test('placeholder media tracks are not treated as a real audio track', () {

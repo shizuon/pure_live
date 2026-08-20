@@ -27,7 +27,10 @@ class DanmakuController extends GetxController {
     this.startTimeout = const Duration(seconds: 20),
     this.stopTimeout = const Duration(seconds: 5),
     this.recoveryAllowed,
-  });
+  }) {
+    // Teardown may run before GetX calls onInit during an early route abort.
+    _delayQueue = CommentaryDanmakuDelayQueue<LiveMessage>(onEmit: _deliverDanmaku);
+  }
 
   final DanmakuSessionHost _main;
   final Duration startTimeout;
@@ -68,7 +71,6 @@ class DanmakuController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _delayQueue = CommentaryDanmakuDelayQueue<LiveMessage>(onEmit: _deliverDanmaku);
     final sync = GlobalPlayerService.instance.commentarySyncController;
     _commentaryWorker = ever<CommentarySyncState>(sync.state, (state) {
       if (selectedSource.value != CommentaryDanmakuSource.commentary) return;

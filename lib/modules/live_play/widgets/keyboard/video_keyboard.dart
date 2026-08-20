@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/modules/live_play/controllers/player_state.dart';
+import 'package:pure_live/modules/live_play/service/commentary_platform_support.dart';
 import 'package:pure_live/modules/live_play/widgets/video_player/video_controller.dart';
 
 class VideoKeyboardShortcuts extends StatefulWidget {
@@ -34,10 +34,11 @@ class _VideoKeyboardShortcutsState extends State<VideoKeyboardShortcuts> {
       _handleEscExit();
       return true;
     }
-    if (Platform.isMacOS && event is KeyDownEvent) {
+    if (CommentaryPlatformSupport.hasDesktopShortcuts && event is KeyDownEvent) {
       final commentary = GlobalPlayerService.instance.commentarySyncController;
       if (commentary.isEngaged) {
-        final step = HardwareKeyboard.instance.isShiftPressed ? 500 : 100;
+        final keyboard = HardwareKeyboard.instance;
+        final step = keyboard.isShiftPressed ? 500 : (keyboard.isAltPressed ? 10 : 100);
         if (event.logicalKey == LogicalKeyboardKey.bracketLeft) {
           unawaited(commentary.adjustOffset(-step));
           return true;
