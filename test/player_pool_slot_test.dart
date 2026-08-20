@@ -28,6 +28,13 @@ void main() {
     await pool.removeFromCache(PlayerEngine.mediaKit, slot: PlayerSlot.commentaryAudio);
     expect((commentary as _FakePlayer).disposed, isTrue);
     expect(pool.cachedPlayer(PlayerEngine.mediaKit, PlayerSlot.mainVideo), same(main));
+
+    final standby = await pool.getPlayer(PlayerEngine.mediaKit, slot: PlayerSlot.standby);
+    final promoted = await pool.promote(PlayerEngine.mediaKit, from: PlayerSlot.standby, to: PlayerSlot.mainVideo);
+    expect(promoted, same(standby));
+    expect((main as _FakePlayer).disposed, isTrue);
+    expect(pool.cachedPlayer(PlayerEngine.mediaKit, PlayerSlot.mainVideo), same(standby));
+    expect(pool.cachedPlayer(PlayerEngine.mediaKit, PlayerSlot.standby), isNull);
   });
 }
 

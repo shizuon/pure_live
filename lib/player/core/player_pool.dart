@@ -39,6 +39,18 @@ class PlayerPool {
 
   UnifiedPlayer? cachedPlayer(PlayerEngine engine, PlayerSlot slot) => _cache[(engine, slot)];
 
+  Future<UnifiedPlayer?> promote(PlayerEngine engine, {required PlayerSlot from, required PlayerSlot to}) async {
+    if (from == to) return _cache[(engine, to)];
+    final incoming = _cache.remove((engine, from));
+    if (incoming == null) return null;
+    final outgoing = _cache.remove((engine, to));
+    if (outgoing != null && !identical(outgoing, incoming)) {
+      await outgoing.hardDispose();
+    }
+    _cache[(engine, to)] = incoming;
+    return incoming;
+  }
+
   Future<void> disposeAll() async {
     for (final player in _cache.values) {
       await player.hardDispose();
