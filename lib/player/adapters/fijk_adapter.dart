@@ -149,6 +149,8 @@ class FijkAdapter implements UnifiedPlayer, FijkPlayerAccessor {
     Map<String, String> headers, {
     LiveRoom? room,
     bool audioOnly = false,
+    bool startMuted = false,
+    bool force = false,
   }) async {
     try {
       _isAudioOnly = audioOnly;
@@ -165,7 +167,7 @@ class FijkAdapter implements UnifiedPlayer, FijkPlayerAccessor {
 
       await _player.setDataSource(url, autoPlay: true);
       _stateSubject.add(PlayerState.ready);
-      await setVolume(1.0);
+      await setVolume(startMuted ? 0 : 1.0);
     } catch (e, s) {
       final exception = PlayerException(
         message: 'Fijk setDataSource failed',

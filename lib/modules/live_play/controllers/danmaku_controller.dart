@@ -7,7 +7,11 @@ import 'package:pure_live/modules/live_play/controllers/danmaku_message_gate.dar
 import 'package:pure_live/modules/live_play/controllers/danmaku_session_host.dart';
 import 'package:pure_live/modules/live_play/controllers/repeated_danmaku_filter.dart';
 import 'package:pure_live/modules/live_play/controllers/danmaku_similarity_filter.dart';
+import 'package:pure_live/modules/live_play/service/commentary_danmaku_delay_queue.dart';
+import 'package:pure_live/modules/live_play/states/commentary_sync_state.dart';
+import 'package:pure_live/plugins/emoji_manager.dart';
 
+enum CommentaryDanmakuSource { video, commentary }
 
 /// Owns exactly one room-bound danmaku session.
 ///
@@ -16,6 +20,8 @@ import 'package:pure_live/modules/live_play/controllers/danmaku_similarity_filte
 /// every callback carries a session token, so an old socket can never append a
 /// packet to the newly opened room.
 class DanmakuController extends GetxController {
+  static const Set<String> _unsupportedPlatforms = {Sites.kuaishouSite, Sites.iptvSite, Sites.ccSite};
+
   DanmakuController(
     this._main, {
     this.startTimeout = const Duration(seconds: 20),
@@ -36,6 +42,12 @@ class DanmakuController extends GetxController {
   Worker? _settingsWorker;
   Worker? _filterWorker;
   Worker? _similarityFilterWorker;
+  Worker? _commentaryWorker;
+
+  late final CommentaryDanmakuDelayQueue<LiveMessage> _delayQueue;
+  final selectedSource = CommentaryDanmakuSource.video.obs;
+  final effectiveDelayMs = 0.obs;
+  LiveRoom? _activeRoom;
 
   int _requestEpoch = 0;
   int _sessionToken = 0;
@@ -51,10 +63,20 @@ class DanmakuController extends GetxController {
   LivePlayState get _state => _main.state.value;
   bool get _initialized => _liveDanmaku != null;
   LiveDanmaku get liveDanmaku => _liveDanmaku!;
+  LiveRoom? get activeRoom => _activeRoom;
 
   @override
   void onInit() {
     super.onInit();
+    _delayQueue = CommentaryDanmakuDelayQueue<LiveMessage>(onEmit: _deliverDanmaku);
+    final sync = GlobalPlayerService.instance.commentarySyncController;
+    _commentaryWorker = ever<CommentarySyncState>(sync.state, (state) {
+      if (selectedSource.value != CommentaryDanmakuSource.commentary) return;
+      _setOffset(state.offsetMs);
+      if (!state.isEngaged) {
+        unawaited(selectSource(CommentaryDanmakuSource.video));
+      }
+    });
     final settings = SettingsService.to;
     _settingsWorker = everAll([
       settings.danmaku.enableDanmakuDisplay,
@@ -70,6 +92,69 @@ class DanmakuController extends GetxController {
     ], (_) => _updateSimilarityFilterConfig());
     _updateSimilarityFilterConfig();
     _refreshFilters();
+  }
+
+  bool supportsRoom(LiveRoom? room) {
+    final platform = room?.platform;
+    return platform != null && !_unsupportedPlatforms.contains(platform);
+  }
+
+  Future<bool> connectVideoRoom(LiveRoom room) {
+    return _connectSourceRoom(room: room, source: CommentaryDanmakuSource.video);
+  }
+
+  Future<bool> selectSource(CommentaryDanmakuSource source) async {
+    final settings = SettingsService.to.danmaku;
+    if (!settings.enableDanmakuDisplay.v && !settings.enablePipDanmaku.v) return false;
+
+    final sync = GlobalPlayerService.instance.commentarySyncController;
+    final room = source == CommentaryDanmakuSource.video ? _state.room.detail : sync.state.value.audioRoom;
+    if (!supportsRoom(room)) return false;
+
+    final previousSource = selectedSource.value;
+    final connected = await _connectSourceRoom(room: room!, source: source);
+    if (connected || previousSource == source) return connected;
+
+    final fallbackRoom = previousSource == CommentaryDanmakuSource.video
+        ? _state.room.detail
+        : sync.state.value.audioRoom;
+    if (supportsRoom(fallbackRoom)) {
+      await _connectSourceRoom(room: fallbackRoom!, source: previousSource);
+    }
+    return false;
+  }
+
+  Future<bool> _connectSourceRoom({required LiveRoom room, required CommentaryDanmakuSource source}) async {
+    if (!supportsRoom(room)) return false;
+    final sameSession = _activeRoom == room && selectedSource.value == source;
+    selectedSource.value = source;
+    _setOffset(
+      source == CommentaryDanmakuSource.commentary
+          ? GlobalPlayerService.instance.commentarySyncController.state.value.offsetMs
+          : 0,
+    );
+    if (!sameSession) {
+      _delayQueue.clear();
+      _main.clearRenderedDanmaku();
+      _activeRoom = null;
+      await EmojiManager.instance.preload(room.platform!);
+      await replaceDanmaku(Sites.of(room.platform!).liveSite.getDanmaku());
+      _addStatusMessage('${i18n('commentary_danmaku_source')}: ${room.nick ?? room.roomId ?? '-'}');
+    }
+    await connectRoom(room, force: !sameSession);
+    final key = _roomKey(room);
+    return _sessionKey == key || _connectingKey == key;
+  }
+
+  void _setOffset(int offsetMs) {
+    final delay = CommentaryDanmakuDelayQueue.effectiveDelayForOffset(offsetMs);
+    effectiveDelayMs.value = delay;
+    _delayQueue.updateOffset(offsetMs);
+  }
+
+  void _deliverDanmaku(LiveMessage message) {
+    _main.addDanmakuMessage(message);
+    _state.player.videoController?.sendDanmaku(message);
   }
 
   /// Initial engine installation is synchronous so room initialization cannot
@@ -97,6 +182,7 @@ class DanmakuController extends GetxController {
   }
 
   bool needReconnect(LiveRoom room) {
+    if (selectedSource.value != CommentaryDanmakuSource.video) return false;
     if (!_initialized) return true;
     final key = _roomKey(room);
     if (_connectingKey == key) return false;
@@ -141,6 +227,7 @@ class DanmakuController extends GetxController {
       final token = ++_sessionToken;
       _maskedNameNoticeShown = false;
       _connectingKey = key;
+      _activeRoom = room;
       _installCallbacks(engine, room, key, token);
 
       if (room.isRecord == true) _addStatusMessage(i18n('recording_mode_notice'));
@@ -168,10 +255,13 @@ class DanmakuController extends GetxController {
     });
   }
 
-  Future<void> stopDanmaku({bool clearRenderer = true}) {
+  Future<void> stopDanmaku({bool clearRenderer = true, bool resetSource = false}) {
     final request = ++_requestEpoch;
     return _serialize(() async {
       if (request != _requestEpoch) return;
+      _delayQueue.clear();
+      effectiveDelayMs.value = 0;
+      if (resetSource) selectedSource.value = CommentaryDanmakuSource.video;
       await _disconnectInternal(clearRenderer: clearRenderer);
     });
   }
@@ -200,10 +290,11 @@ class DanmakuController extends GetxController {
           _maskedNameNoticeShown = true;
           _addStatusMessage(i18n('bilibili_guest_name_masked'));
         }
-        _main.addDanmakuMessage(msg);
-        _state.player.videoController?.sendDanmaku(msg);
+        _delayQueue.add(msg);
       } else if (msg.type == LiveMessageType.online) {
-        _main.updateRuntimeAudience(msg.data);
+        if (selectedSource.value == CommentaryDanmakuSource.video) {
+          _main.updateRuntimeAudience(msg.data);
+        }
       } else if (msg.type == LiveMessageType.superChat) {
         _main.addAddSuperChat(msg);
       }
@@ -284,6 +375,8 @@ class DanmakuController extends GetxController {
     _sessionToken++;
     _sessionKey = null;
     _connectingKey = null;
+    _activeRoom = null;
+    _delayQueue.clear();
     _main.updateDanmakuRoomId(null);
     if (clearRenderer) _main.clearRenderedDanmaku();
     if (engine == null) return;
@@ -307,15 +400,16 @@ class DanmakuController extends GetxController {
 
   Future<void> _syncConnectionForSettings() async {
     if (!_initialized) return;
-    final room = _state.room.detail;
+    final room = selectedSource.value == CommentaryDanmakuSource.commentary
+        ? GlobalPlayerService.instance.commentarySyncController.state.value.audioRoom
+        : _state.room.detail;
     if (room == null) return;
-    const except = [Sites.kuaishouSite, Sites.iptvSite, Sites.ccSite];
     final settings = SettingsService.to.danmaku;
     try {
-      if (except.contains(room.platform) || (!settings.enableDanmakuDisplay.v && !settings.enablePipDanmaku.v)) {
+      if (!supportsRoom(room) || (!settings.enableDanmakuDisplay.v && !settings.enablePipDanmaku.v)) {
         await stopDanmaku();
       } else {
-        await connectRoom(room);
+        await _connectSourceRoom(room: room, source: selectedSource.value);
       }
     } catch (error, stackTrace) {
       CoreLog.e(error.toString(), stackTrace);
@@ -327,19 +421,21 @@ class DanmakuController extends GetxController {
   /// accidentally open a socket when danmaku is disabled.
   Future<void> recoverRoomConnection(LiveRoom room) async {
     if (!_initialized) return;
-    if (!_isRecoveryAllowed(room)) {
+    final targetRoom = selectedSource.value == CommentaryDanmakuSource.commentary
+        ? GlobalPlayerService.instance.commentarySyncController.state.value.audioRoom
+        : room;
+    if (targetRoom == null || !_isRecoveryAllowed(targetRoom)) {
       await stopDanmaku();
       return;
     }
-    await connectRoom(room);
+    await _connectSourceRoom(room: targetRoom, source: selectedSource.value);
   }
 
   bool _isRecoveryAllowed(LiveRoom room) {
     final override = recoveryAllowed;
     if (override != null) return override(room);
-    const except = [Sites.kuaishouSite, Sites.iptvSite, Sites.ccSite];
     final settings = SettingsService.to.danmaku;
-    return !except.contains(room.platform) && (settings.enableDanmakuDisplay.v || settings.enablePipDanmaku.v);
+    return supportsRoom(room) && (settings.enableDanmakuDisplay.v || settings.enablePipDanmaku.v);
   }
 
   String _roomKey(LiveRoom room) => '${room.platform ?? ''}:${room.roomId ?? ''}';
@@ -357,9 +453,11 @@ class DanmakuController extends GetxController {
     _settingsWorker?.dispose();
     _filterWorker?.dispose();
     _similarityFilterWorker?.dispose();
+    _commentaryWorker?.dispose();
     _messageGate.clear();
     _repeatedMessageFilter.clear();
     _similarityFilter.clear();
+    _delayQueue.dispose();
     _requestEpoch++;
     _sessionToken++;
     final engine = _liveDanmaku;
@@ -369,6 +467,8 @@ class DanmakuController extends GetxController {
     }
     _main.updateDanmakuRoomId(null);
     _main.clearRenderedDanmaku();
+    selectedSource.close();
+    effectiveDelayMs.close();
     super.onClose();
   }
 }

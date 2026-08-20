@@ -1,34 +1,43 @@
 import '../models/player_engine.dart';
+import '../models/player_slot.dart';
 import '../interface/unified_player_interface.dart';
 
 class PlayerPool {
-  final Map<PlayerEngine, UnifiedPlayer> _cache = {};
+  final Map<(PlayerEngine, PlayerSlot), UnifiedPlayer> _cache = {};
 
   final Future<UnifiedPlayer> Function(PlayerEngine) factory;
 
   PlayerPool({required this.factory});
 
-  Future<UnifiedPlayer> getPlayer(PlayerEngine engine, {bool audioOnly = false}) async {
-    if (_cache.containsKey(engine)) {
-      return _cache[engine]!;
+  Future<UnifiedPlayer> getPlayer(
+    PlayerEngine engine, {
+    PlayerSlot slot = PlayerSlot.mainVideo,
+    bool audioOnly = false,
+  }) async {
+    final key = (engine, slot);
+    if (_cache.containsKey(key)) {
+      return _cache[key]!;
     }
 
     final player = await factory(engine);
 
     await player.init(audioOnly: audioOnly);
 
-    _cache[engine] = player;
+    _cache[key] = player;
 
     return player;
   }
 
-  Future<void> removeFromCache(PlayerEngine engine) async {
-    if (_cache.containsKey(engine)) {
-      final player = _cache[engine]!;
+  Future<void> removeFromCache(PlayerEngine engine, {PlayerSlot slot = PlayerSlot.mainVideo}) async {
+    final key = (engine, slot);
+    if (_cache.containsKey(key)) {
+      final player = _cache[key]!;
       await player.hardDispose(); // 销毁原生
-      _cache.remove(engine); // 从缓存删除
+      _cache.remove(key); // 从缓存删除
     }
   }
+
+  UnifiedPlayer? cachedPlayer(PlayerEngine engine, PlayerSlot slot) => _cache[(engine, slot)];
 
   Future<void> disposeAll() async {
     for (final player in _cache.values) {

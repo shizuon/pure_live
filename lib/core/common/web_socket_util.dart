@@ -21,7 +21,7 @@ WebSocketChannel _connectIoWebSocket(
 
 enum SocketStatus { connected, failed, closed }
 
-/// WebSocket connection helper with endpoint failover and bounded reconnects.
+/// WebSocket connection helper with endpoint failover and one-shot reconnects.
 ///
 /// The original implementation kept a periodic reconnect timer alive after a
 /// successful connection. That could create parallel sockets every five
@@ -63,7 +63,7 @@ class WebScoketUtils {
     this.backupUrl,
     this.protocols,
     this.inactivityTimeout,
-    this.reconnectBaseDelay = const Duration(seconds: 1),
+    this.reconnectBaseDelay = const Duration(seconds: 15),
     this.connector = _connectIoWebSocket,
     List<String>? serverUrls,
   }) : serverUrls = _uniqueEndpoints(url, backupUrl, serverUrls);
@@ -74,7 +74,7 @@ class WebScoketUtils {
   StreamSubscription<dynamic>? streamSubscription;
 
   int reconnectTime = 0;
-  int maxReconnectTime = 8;
+  int? maxReconnectTime;
   int _endpointIndex = 0;
   int _generation = 0;
   bool _manualClose = false;
@@ -190,7 +190,8 @@ class WebScoketUtils {
     heartBeatTimer = null;
     if (reconnectTime == 0) onReconnect?.call();
 
-    if (reconnectTime >= maxReconnectTime) {
+    final retryLimit = maxReconnectTime;
+    if (retryLimit != null && reconnectTime >= retryLimit) {
       onClose?.call('重连超过最大次数，与服务器断开连接：$message');
       unawaited(close());
       return;
@@ -198,11 +199,7 @@ class WebScoketUtils {
 
     reconnectTime++;
     _endpointIndex = (_endpointIndex + 1) % serverUrls.length;
-    // Try the next server quickly; use a short backoff after every full round.
-    final completedRounds = reconnectTime ~/ serverUrls.length;
-    final delayMultiplier = completedRounds.clamp(0, 5) + 1;
-    final delay = Duration(microseconds: reconnectBaseDelay.inMicroseconds * delayMultiplier);
-    reconnectTimer = Timer(delay, () {
+    reconnectTimer = Timer(reconnectBaseDelay, () {
       reconnectTimer = null;
       connect();
     });

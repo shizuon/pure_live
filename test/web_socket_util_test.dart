@@ -1,10 +1,32 @@
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pure_live/core/common/web_socket_util.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
+  test('danmaku reconnects every 15 seconds until manually closed', () {
+    fakeAsync((async) {
+      final socket = _ReconnectProbe();
+
+      socket.reconnect();
+      async.elapse(const Duration(seconds: 14, milliseconds: 999));
+      expect(socket.attempts, 0);
+
+      async.elapse(const Duration(milliseconds: 1));
+      expect(socket.attempts, 1);
+
+      async.elapse(const Duration(seconds: 30));
+      expect(socket.attempts, 3);
+
+      unawaited(socket.close());
+      async.flushMicrotasks();
+      async.elapse(const Duration(minutes: 1));
+      expect(socket.attempts, 3);
+    });
+  });
+
   test('a silent half-open socket is closed and reconnected on the next endpoint', () async {
     final endpoints = <String>[];
     final channels = <_FakeWebSocketChannel>[];
@@ -63,6 +85,19 @@ void main() {
     expect(socket.status, SocketStatus.connected);
     await socket.close();
   });
+}
+
+class _ReconnectProbe extends WebScoketUtils {
+  _ReconnectProbe()
+    : super(url: 'wss://example.invalid', heartBeatTime: 60000, reconnectBaseDelay: const Duration(seconds: 15));
+
+  int attempts = 0;
+
+  @override
+  Future<void> connect({bool retry = false}) async {
+    attempts++;
+    reconnect();
+  }
 }
 
 class _FakeWebSocketChannel implements WebSocketChannel {

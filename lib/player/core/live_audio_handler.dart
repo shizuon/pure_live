@@ -7,9 +7,11 @@ import 'package:pure_live/common/services/settings_service.dart';
 import 'package:pure_live/player/core/background_playback_policy.dart';
 import 'package:pure_live/player/core/background_playback_service.dart';
 import 'package:pure_live/player/interface/unified_player_interface.dart';
+import 'package:pure_live/player/core/live_audio_control_delegate.dart';
 
 class LiveAudioHandler extends BaseAudioHandler {
   UnifiedPlayer? _currentPlayer; // 动态绑定
+  LiveAudioControlDelegate? _controlDelegate;
   late AudioSession _session;
   late final Future<void> _sessionReady;
 
@@ -24,6 +26,10 @@ class LiveAudioHandler extends BaseAudioHandler {
     await _playStateSubscription?.cancel();
     _currentPlayer = player;
     _listenPlayState();
+  }
+
+  void setControlDelegate(LiveAudioControlDelegate? delegate) {
+    _controlDelegate = delegate;
   }
 
   Future<void> _initSession() async {
@@ -42,7 +48,7 @@ class LiveAudioHandler extends BaseAudioHandler {
           case AudioInterruptionType.unknown:
             break;
           case AudioInterruptionType.duck:
-            _currentPlayer!.setVolume(0.2);
+            (_controlDelegate ?? _currentPlayer!).setVolume(0.2);
             break;
         }
       } else {
@@ -51,7 +57,7 @@ class LiveAudioHandler extends BaseAudioHandler {
             play();
             break;
           case AudioInterruptionType.duck:
-            _currentPlayer!.setVolume(1.0);
+            (_controlDelegate ?? _currentPlayer!).setVolume(1.0);
             break;
           case AudioInterruptionType.unknown:
             break;
@@ -123,13 +129,13 @@ class LiveAudioHandler extends BaseAudioHandler {
     if (_currentPlayer == null) return;
 
     await activateSession();
-    await _currentPlayer!.play();
+    await (_controlDelegate ?? _currentPlayer!).play();
   }
 
   @override
   Future<void> pause() async {
     if (_currentPlayer == null) return;
-    await _currentPlayer!.pause();
+    await (_controlDelegate ?? _currentPlayer!).pause();
   }
 
   @override
@@ -143,15 +149,20 @@ class LiveAudioHandler extends BaseAudioHandler {
     _sleepTimer = null;
 
     try {
-      await _currentPlayer!.stop();
+      await (_controlDelegate ?? _currentPlayer!).stop();
     } catch (e) {
       developer.log("Player already disposed or failed to stop: $e");
     } finally {
-      await _sessionReady;
-      await _session.setActive(false);
-      await BackgroundPlaybackService.setKeepAlive(false);
-
-      playbackState.add(playbackState.value.copyWith(playing: false, processingState: AudioProcessingState.idle));
+      await deactivate();
     }
+  }
+
+  /// Ends the OS media session without sending another stop command back to
+  /// the player. Primary player reloads use this to avoid delegate recursion.
+  Future<void> deactivate() async {
+    await _sessionReady;
+    await _session.setActive(false);
+    await BackgroundPlaybackService.setKeepAlive(false);
+    playbackState.add(playbackState.value.copyWith(playing: false, processingState: AudioProcessingState.idle));
   }
 }

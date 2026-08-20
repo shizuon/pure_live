@@ -138,13 +138,23 @@ class PlayerController extends GetxController {
     Map<String, String> headers,
     LiveRoom room,
     bool audioOnly,
-  ) {
+  ) async {
     final manager = GlobalPlayerService.instance.player;
-    return manager.play(url, playUrls, headers, room: room, audioOnly: audioOnly).then((_) {
-      if (manager.hasError.value) {
-        throw PlayerException(message: 'Selected stream failed to open', type: PlayerErrorType.source);
-      }
-    });
+    final commentary = GlobalPlayerService.instance.commentarySyncController;
+    final rebuildingCommentaryBaseline = commentary.isEngaged;
+    if (rebuildingCommentaryBaseline) commentary.markPrimaryReloading();
+    await manager.play(
+      url,
+      playUrls,
+      headers,
+      room: room,
+      audioOnly: audioOnly,
+      startMuted: commentary.isActive,
+    );
+    if (manager.hasError.value) {
+      throw PlayerException(message: 'Selected stream failed to open', type: PlayerErrorType.source);
+    }
+    if (rebuildingCommentaryBaseline) await commentary.onPrimaryReady();
   }
 
   LivePlayState get _state => _main.state.value;
@@ -482,6 +492,9 @@ class PlayerController extends GetxController {
   }
 
   Future<void> changeCurrentRoomAudioOnly(bool value) async {
+    if (value) {
+      await GlobalPlayerService.instance.commentarySyncController.exit();
+    }
     await _audioModeTransitions.submit(value);
   }
 

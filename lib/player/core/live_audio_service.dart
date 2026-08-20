@@ -7,11 +7,13 @@ import 'package:pure_live/player/core/live_audio_handler.dart';
 import 'package:pure_live/player/core/background_playback_policy.dart';
 import 'package:pure_live/player/core/background_playback_service.dart';
 import 'package:pure_live/player/interface/unified_player_interface.dart';
+import 'package:pure_live/player/core/live_audio_control_delegate.dart';
 import 'package:pure_live/common/services/settings/app_settings_controller.dart';
 
 class LiveAudioService {
   static LiveAudioHandler? _handler;
   static UnifiedPlayer? _boundPlayer;
+  static LiveAudioControlDelegate? _controlDelegate;
   static Future<LiveAudioHandler?>? _initializationFuture;
   static int _sleepMinutes = 60;
 
@@ -54,7 +56,13 @@ class LiveAudioService {
       ),
     );
     _handler = handler;
+    handler.setControlDelegate(_controlDelegate);
     return handler;
+  }
+
+  static Future<void> setControlDelegate(LiveAudioControlDelegate? delegate) async {
+    _controlDelegate = delegate;
+    _handler?.setControlDelegate(delegate);
   }
 
   static Future<void> setPlayer(UnifiedPlayer player, {required bool audioOnly}) async {
@@ -118,6 +126,14 @@ class LiveAudioService {
     if (_handler == null) return;
     if (!PlatformUtils.isMobile && !PlatformUtils.isMacOS) return;
     await _handler!.stop();
+  }
+
+  static Future<void> deactivate() async {
+    BackgroundPlaybackService.sleepSessionActive = false;
+    BackgroundPlaybackService.audioOnlySessionActive = false;
+    if (_handler == null) return;
+    if (!PlatformUtils.isMobile && !PlatformUtils.isMacOS) return;
+    await _handler!.deactivate();
   }
 
   static Future<void> releaseKeepAlive() => BackgroundPlaybackService.setKeepAlive(false);

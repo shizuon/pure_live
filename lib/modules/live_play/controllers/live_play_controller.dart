@@ -712,15 +712,19 @@ class LivePlayController extends GetxController
     const except = [Sites.kuaishouSite, Sites.iptvSite, Sites.ccSite];
     final danmakuSettings = SettingsService.to.danmaku;
     final shouldConnectDanmaku = danmakuSettings.enableDanmakuDisplay.v || danmakuSettings.enablePipDanmaku.v;
+    if (danmakuController.selectedSource.value == CommentaryDanmakuSource.commentary &&
+        GlobalPlayerService.instance.commentarySyncController.isEngaged) {
+      return;
+    }
     if (!except.contains(liveRoom.platform) && shouldConnectDanmaku) {
-      await danmakuController.connectRoom(liveRoom);
+      await danmakuController.connectVideoRoom(liveRoom);
     } else {
-      await danmakuController.stopDanmaku();
+      await danmakuController.stopDanmaku(resetSource: true);
     }
   }
 
   void _handleNotLiveRoom(LiveRoom liveRoom) {
-    unawaited(danmakuController.stopDanmaku());
+    unawaited(danmakuController.stopDanmaku(resetSource: true));
     updateRoom(success: false, isLiving: false);
     setNormalScreen();
     GlobalPlayerState.to.isFullscreen.value = false;
@@ -736,7 +740,7 @@ class LivePlayController extends GetxController
   }
 
   void _handleUnknownStatus() {
-    unawaited(danmakuController.stopDanmaku());
+    unawaited(danmakuController.stopDanmaku(resetSource: true));
     if (Get.currentRoute == '/live_play') {
       ToastUtil.show(i18n('get_room_info_failed_retry'));
       setNormalScreen();
@@ -769,7 +773,7 @@ class LivePlayController extends GetxController
     playerController.setPlayer(roomId: state.value.room.detail!.roomId!);
     updateRoom(success: true);
 
-    unawaited(danmakuController.stopDanmaku());
+    unawaited(danmakuController.stopDanmaku(resetSource: true));
   }
 
   void _restoreQualityAndLines() {
@@ -787,7 +791,8 @@ class LivePlayController extends GetxController
 
     if (!sameRoom) {
       clearDanmakuMessages();
-      await danmakuController.stopDanmaku();
+      await danmakuController.stopDanmaku(resetSource: true);
+      await GlobalPlayerService.instance.commentarySyncController.exit();
     }
 
     final manager = GlobalPlayerService.instance.player;
@@ -978,7 +983,8 @@ class LivePlayController extends GetxController
   }
 
   Future<void> _disposeAppFloatingResourcesAsync(VideoController? videoController) async {
-    await danmakuController.stopDanmaku();
+    await danmakuController.stopDanmaku(resetSource: true);
+    await GlobalPlayerService.instance.commentarySyncController.exit();
     videoController?.dispose();
     if (_ownerClosed) {
       _releaseChildControllers();

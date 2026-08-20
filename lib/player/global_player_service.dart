@@ -4,8 +4,12 @@ import 'core/player_manager.dart';
 import 'models/player_engine.dart';
 import 'core/line_fallback_manager.dart';
 import 'core/engine_fallback_manager.dart';
+import 'core/player_pool.dart';
+import 'adapters/player_adapter_factory.dart';
 
 import 'package:pure_live/common/global/platform_utils.dart';
+import 'package:pure_live/modules/live_play/controllers/commentary_sync_controller.dart';
+import 'package:pure_live/player/core/live_audio_service.dart';
 
 class GlobalPlayerService {
   GlobalPlayerService._();
@@ -13,6 +17,8 @@ class GlobalPlayerService {
   static final GlobalPlayerService instance = GlobalPlayerService._();
 
   late final PlayerManager playerManager;
+  late final PlayerPool playerPool;
+  late final CommentarySyncController commentarySyncController;
   PlayerManager get player => playerManager;
   bool _initialized = false;
   Future<void>? _initializationFuture;
@@ -37,6 +43,8 @@ class GlobalPlayerService {
   }
 
   Future<void> _initialize(PlayerEngine defaultEngine) async {
+    playerPool = PlayerPool(factory: PlayerAdapterFactory.create);
+
     // 1. Instantiate the Orchestrator with all its specialized managers
     playerManager = PlayerManager(
       fallbackManager: EngineFallbackManager(
@@ -50,6 +58,9 @@ class GlobalPlayerService {
     // first room is opened. This avoids paying hundreds of MiB and background
     // CPU merely for browsing the home/settings UI.
     await playerManager.initialize(engine: defaultEngine, audioOnly: false);
+    commentarySyncController = CommentarySyncController(primaryManager: playerManager, playerPool: playerPool);
+    playerManager.controlDelegate = commentarySyncController;
+    await LiveAudioService.setControlDelegate(commentarySyncController);
     _initialized = true;
     log("GlobalPlayerService: Player initialized.", name: "GlobalPlayerService");
   }
@@ -57,7 +68,11 @@ class GlobalPlayerService {
   /// Global dispose - Call this only when the app is being destroyed
   Future<void> dispose() async {
     if (!_initialized) return;
+    await commentarySyncController.dispose();
+    playerManager.controlDelegate = null;
+    await LiveAudioService.setControlDelegate(null);
     await playerManager.dispose();
+    await playerPool.disposeAll();
     _initialized = false;
     log("GlobalPlayerService: Disposed.", name: "GlobalPlayerService");
   }

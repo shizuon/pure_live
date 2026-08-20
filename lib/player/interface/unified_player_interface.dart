@@ -7,7 +7,9 @@ import 'package:pure_live/player/models/player_engine.dart';
 
 
 
-abstract class UnifiedPlayer {
+import '../core/live_audio_control_delegate.dart';
+
+abstract class UnifiedPlayer implements LiveAudioControlDelegate {
   Future<void> init({bool audioOnly = false});
   PlayerEngine get engine;
 
@@ -21,12 +23,17 @@ abstract class UnifiedPlayer {
     Map<String, String> headers, {
     LiveRoom? room,
     bool audioOnly = false,
+    bool startMuted = false,
+    bool force = false,
   });
 
+  @override
   Future<void> play();
 
+  @override
   Future<void> pause();
 
+  @override
   Future<void> stop();
 
   // 不销毁播放器
@@ -40,6 +47,7 @@ abstract class UnifiedPlayer {
   // 真正释放播放器
   Future<void> hardDispose();
 
+  @override
   Future<void> setVolume(double volume);
 
   /// 获取渲染组件

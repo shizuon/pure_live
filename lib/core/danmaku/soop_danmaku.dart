@@ -98,7 +98,7 @@ class SoopDanmaku implements LiveDanmaku {
       },
       onReconnect: () {
         markDisconnected();
-        onClose?.call("与服务器断开连接，正在尝试重连");
+        onClose?.call("与服务器断开连接，正在尝试重连（15秒后）");
       },
       onClose: (e) {
         markDisconnected();

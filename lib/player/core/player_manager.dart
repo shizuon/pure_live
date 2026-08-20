@@ -31,6 +31,7 @@ import 'package:pure_live/player/utils/player_consts.dart';
 import 'package:pure_live/common/global/platform_utils.dart';
 import 'package:pure_live/player/utils/pip_window_widget.dart';
 import 'package:pure_live/player/core/live_audio_service.dart';
+import 'package:pure_live/player/core/live_audio_control_delegate.dart';
 import 'package:pure_live/player/adapters/media_kit_adapter.dart';
 import 'package:pure_live/common/utils/latest_async_value_queue.dart';
 import 'package:pure_live/player/adapters/player_adapter_factory.dart';
@@ -100,6 +101,11 @@ class PlayerManager {
   String? _currentUrl;
   List<String> _currentPlayUrls = [];
   Map<String, String> _currentHeaders = {};
+  bool _currentStartMuted = false;
+
+  /// Routes controls rendered by PlayerManager (floating/PiP) through the
+  /// dual-stream coordinator without making primary player methods recurse.
+  LiveAudioControlDelegate? controlDelegate;
 
   final RxBool isInitialized = false.obs;
   final RxBool hasError = false.obs;
@@ -402,8 +408,20 @@ class PlayerManager {
     Map<String, String> headers, {
     LiveRoom? room,
     bool audioOnly = false,
+    bool startMuted = false,
+    bool force = false,
   }) {
-    return _enqueuePlayerLifecycle(() => _playInternal(url, playUrls, headers, room: room, audioOnly: audioOnly));
+    return _enqueuePlayerLifecycle(
+      () => _playInternal(
+        url,
+        playUrls,
+        headers,
+        room: room,
+        audioOnly: audioOnly,
+        startMuted: startMuted,
+        force: force,
+      ),
+    );
   }
 
   Future<void> _playInternal(
@@ -412,6 +430,8 @@ class PlayerManager {
     Map<String, String> headers, {
     LiveRoom? room,
     bool audioOnly = false,
+    bool startMuted = false,
+    bool force = false,
   }) async {
     if (_disposed) return;
     _audioModeVideoWarmTimer?.cancel();
@@ -466,6 +486,7 @@ class PlayerManager {
     _currentUrl = targetUrl;
     _currentPlayUrls = targetPlayUrls;
     _currentHeaders = headers;
+    _currentStartMuted = startMuted;
     currentFloatRoom = room;
 
     _widthSubject.add(null);
@@ -476,13 +497,21 @@ class PlayerManager {
 
     try {
       _stateSubject.add(PlayerState.preparing);
-      await player.setDataSource(targetUrl, targetPlayUrls, headers, room: room, audioOnly: audioOnly);
+      await player.setDataSource(
+        targetUrl,
+        targetPlayUrls,
+        headers,
+        room: room,
+        audioOnly: audioOnly,
+        startMuted: startMuted,
+        force: force,
+      );
       if (!_isSessionValid(mySessionId)) return;
       _nativeAudioOnly = audioOnly;
 
       // Desktop player adapters do not all restore the per-room volume in
       // setDataSource. Apply it centrally so every engine starts consistently.
-      if (PlatformUtils.isDesktop && room != null) {
+      if (PlatformUtils.isDesktop && room != null && !startMuted) {
         try {
           await player.setVolume(room.getSavedVolume().clamp(0.0, 1.0));
         } catch (error, stackTrace) {
@@ -515,7 +544,7 @@ class PlayerManager {
     }
   }
 
-  Future<void> replay() {
+  Future<void> replay({bool? startMuted}) {
     return _enqueuePlayerLifecycle(() async {
       if (_currentUrl == null) return;
 
@@ -525,8 +554,14 @@ class PlayerManager {
         _currentHeaders,
         room: currentFloatRoom,
         audioOnly: _runtimeAudioOnly,
+        startMuted: startMuted ?? _currentStartMuted,
+        force: true,
       );
     });
+  }
+
+  void setMutedForFutureReloads(bool muted) {
+    _currentStartMuted = muted;
   }
 
   /// Changes the current room between video and audio-only in place.
@@ -838,6 +873,15 @@ class PlayerManager {
   }
 
   Future<void> togglePlayPause() async {
+    final delegate = controlDelegate;
+    if (delegate != null) {
+      if (isPlayingNow) {
+        await delegate.pause();
+      } else {
+        await delegate.play();
+      }
+      return;
+    }
     if (_currentPlayer == null) return;
     if (isPlayingNow) {
       await pause();
@@ -1049,7 +1093,12 @@ class PlayerManager {
                           style: IconButton.styleFrom(backgroundColor: Colors.black45),
                           icon: const Icon(Icons.close, color: Colors.white, size: 20),
                           onPressed: () async {
-                            await stop();
+                            final delegate = controlDelegate;
+                            if (delegate != null) {
+                              await delegate.stop();
+                            } else {
+                              await stop();
+                            }
                           },
                         ),
                       ),
@@ -1506,7 +1555,7 @@ class PlayerManager {
     // otherwise leave close/play serialized behind a Future that never ends.
     await _awaitBoundedWidgetUnmount();
     try {
-      await LiveAudioService.stop();
+      await LiveAudioService.deactivate();
       _useHardStopOnExit() ? await _hardDisposeInternal() : await softStop();
     } finally {
       _isClosing = false;
@@ -1552,7 +1601,20 @@ class PlayerManager {
     return _enqueuePlayerLifecycle(() async {
       final url = _currentUrl;
       if (url == null) return;
-      await _playInternal(url, _currentPlayUrls, _currentHeaders, room: currentFloatRoom, audioOnly: _runtimeAudioOnly);
+      final reloadDelegate = controlDelegate is PrimaryPlaybackReloadDelegate
+          ? controlDelegate as PrimaryPlaybackReloadDelegate
+          : null;
+      reloadDelegate?.markPrimaryReloading();
+      await _playInternal(
+        url,
+        _currentPlayUrls,
+        _currentHeaders,
+        room: currentFloatRoom,
+        audioOnly: _runtimeAudioOnly,
+        startMuted: _currentStartMuted,
+        force: true,
+      );
+      await reloadDelegate?.onPrimaryReady();
     });
   }
 
@@ -1582,6 +1644,10 @@ class PlayerManager {
           if (nextLine != _currentUrl) {
             lineSwitched = true;
             log("switch line => $nextLine");
+            final reloadDelegate = controlDelegate is PrimaryPlaybackReloadDelegate
+                ? controlDelegate as PrimaryPlaybackReloadDelegate
+                : null;
+            reloadDelegate?.markPrimaryReloading();
             await Future.delayed(const Duration(seconds: 2));
             if (!_isSessionValid(mySessionId)) return;
             await _playInternal(
@@ -1590,7 +1656,9 @@ class PlayerManager {
               _currentHeaders,
               room: currentFloatRoom,
               audioOnly: _runtimeAudioOnly,
+              startMuted: _currentStartMuted,
             );
+            await reloadDelegate?.onPrimaryReady();
             return;
           }
         }
@@ -1619,6 +1687,7 @@ class PlayerManager {
           _currentHeaders,
           room: currentFloatRoom,
           audioOnly: _runtimeAudioOnly,
+          startMuted: _currentStartMuted,
         );
         return;
       }

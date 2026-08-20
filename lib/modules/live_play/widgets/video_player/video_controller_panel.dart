@@ -14,6 +14,7 @@ import 'package:scrollview_observer/scrollview_observer.dart';
 import 'package:pure_live/modules/live_play/states/load_type.dart';
 import 'package:pure_live/player/core/portrait_stream_support.dart';
 import 'package:pure_live/modules/live_play/dialogs/play_other.dart';
+import 'package:pure_live/modules/live_play/widgets/commentary_sync_widgets.dart';
 import 'package:pure_live/core/iptv/local/database.dart' as database;
 import 'package:pure_live/modules/live_play/controllers/player_state.dart';
 import 'package:pure_live/modules/live_play/pages/danmaku_settings_page.dart';
@@ -28,7 +29,7 @@ import 'package:pure_live/modules/live_play/widgets/local_interaction/local_danm
 enum TopActionLeadingSlot { back, datetime, battery }
 
 @visibleForTesting
-enum TopActionTrailingSlot { roomHistory, datetime, battery, audioOnly, cast, pip }
+enum TopActionTrailingSlot { roomHistory, datetime, battery, audioOnly, commentary, cast, pip }
 
 /// Resolves the fixed order of the fullscreen leading actions. On Android the
 /// clock and battery sit beside Back; PiP moves to the opposite corner so the
@@ -50,12 +51,14 @@ List<TopActionTrailingSlot> resolveTopActionTrailingSlots({
   required bool fullscreen,
   required bool android,
   required bool windows,
+  bool macOS = false,
 }) {
   return <TopActionTrailingSlot>[
     if (fullscreen) TopActionTrailingSlot.roomHistory,
     if (fullscreen && !android) TopActionTrailingSlot.datetime,
     if (fullscreen && !android) TopActionTrailingSlot.battery,
     TopActionTrailingSlot.audioOnly,
+    if (macOS) TopActionTrailingSlot.commentary,
     if (android) TopActionTrailingSlot.cast,
     if (android || windows) TopActionTrailingSlot.pip,
   ];
@@ -165,8 +168,9 @@ class _VideoControllerPanelState extends State<VideoControllerPanel> {
                     // tap on a paused surface keeps the historical resume
                     // behavior as well.
                     controller.enableController();
-                    if (!GlobalPlayerService.instance.player.isPlayingNow) {
-                      GlobalPlayerService.instance.player.togglePlayPause();
+                    final commentary = GlobalPlayerService.instance.commentarySyncController;
+                    if (!commentary.isPlaying) {
+                      commentary.togglePlayPause();
                     }
                   },
                   onLongPressStart: (details) {
@@ -182,6 +186,8 @@ class _VideoControllerPanelState extends State<VideoControllerPanel> {
                   child: BrightnessVolumnDargArea(controller: controller),
                 ),
                 LockButton(controller: controller),
+                if (Platform.isMacOS) CommentaryCalibrationPreview(controller: controller),
+                if (Platform.isMacOS) CommentarySyncBadge(controller: controller),
                 TopActionBar(controller: controller, barHeight: barHeight),
                 BottomActionBar(controller: controller, barHeight: barHeight),
               ],
@@ -311,6 +317,7 @@ class TopActionBar extends StatelessWidget {
                 fullscreen: GlobalPlayerState.to.fullscreenUI,
                 android: PlatformUtils.isAndroid,
                 windows: PlatformUtils.isWindows,
+                macOS: Platform.isMacOS,
               ))
                 switch (slot) {
                   TopActionTrailingSlot.roomHistory => IconButton(
@@ -329,6 +336,7 @@ class TopActionBar extends StatelessWidget {
                     key: const ValueKey('playback-action-audio-only'),
                     controller: controller,
                   ),
+                  TopActionTrailingSlot.commentary => CommentarySyncButton(controller: controller),
                   TopActionTrailingSlot.cast => CastButton(
                     key: const ValueKey('playback-action-cast'),
                     controller: controller,
@@ -1843,7 +1851,7 @@ class PlayPauseButton extends StatelessWidget {
     final playerManager = GlobalPlayerService.instance.player;
 
     return GestureDetector(
-      onTap: () => playerManager.togglePlayPause(),
+      onTap: () => GlobalPlayerService.instance.commentarySyncController.togglePlayPause(),
       child: StreamBuilder<bool>(
         stream: playerManager.onPlaying.distinct(),
         initialData: playerManager.isPlayingNow,

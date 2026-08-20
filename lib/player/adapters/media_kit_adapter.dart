@@ -10,6 +10,7 @@ import 'package:pure_live/common/index.dart';
 import 'package:pure_live/core/common/log.dart';
 
 import '../interface/unified_player_interface.dart';
+import '../interface/sync_capable_player.dart';
 
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:media_kit/media_kit.dart' hide PlayerState;
@@ -25,7 +26,7 @@ import 'package:pure_live/player/interface/media_kit_player_accessor.dart';
   return size == null ? null : (width: size.width, height: size.height);
 }
 
-class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor {
+class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapablePlayer {
   MediaKitAdapter() {
     _audioModeTransitions = LatestAsyncValueQueue<bool>(_applyAudioOnly);
   }
@@ -121,6 +122,10 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor {
 
   final _heightSubject = BehaviorSubject<int?>.seeded(null);
 
+  final _positionSubject = BehaviorSubject<Duration>.seeded(Duration.zero);
+
+  final _bufferSubject = BehaviorSubject<Duration>.seeded(Duration.zero);
+
   // =========================
   // subscriptions
   // =========================
@@ -136,6 +141,10 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor {
   StreamSubscription? _completeSub;
 
   StreamSubscription? _errorSub;
+
+  StreamSubscription? _positionSub;
+
+  StreamSubscription? _bufferSub;
 
   // =========================
   // init
@@ -226,10 +235,12 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor {
     Map<String, String> headers, {
     LiveRoom? room,
     bool audioOnly = false,
+    bool startMuted = false,
+    bool force = false,
   }) async {
     if (_disposed) return;
 
-    if (_currentUrl == url && isPlayingNow) {
+    if (!force && _currentUrl == url && isPlayingNow) {
       return;
     }
     _currentUrl = url;
@@ -244,6 +255,8 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor {
       _widthSubject.add(null);
 
       _heightSubject.add(null);
+
+      if (startMuted) await setVolume(0);
 
       await _player.open(Media(url, httpHeaders: headers), play: true);
 
@@ -261,9 +274,9 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor {
 
       _stateSubject.add(PlayerState.ready);
 
-      if (PlatformUtils.isMobile) {
+      if (!startMuted && PlatformUtils.isMobile) {
         await setVolume(1.0);
-      } else {
+      } else if (!startMuted) {
         final targetVolume = room?.getSavedVolume() ?? 1.0;
         await setVolume(targetVolume);
       }
@@ -385,11 +398,27 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor {
       _stateSubject.add(PlayerState.error);
     });
 
+    _positionSub = _player.stream.position.listen((position) {
+      if (!_disposed) _positionSubject.add(position);
+    });
+
+    _bufferSub = _player.stream.buffer.listen((position) {
+      if (!_disposed) _bufferSubject.add(position);
+    });
+
     // =========================
     // collect
     // =========================
 
-    _subscriptions.addAll([_playingSub!, _bufferingSub!, _videoParamsSub!, _completeSub!, _errorSub!]);
+    _subscriptions.addAll([
+      _playingSub!,
+      _bufferingSub!,
+      _videoParamsSub!,
+      _completeSub!,
+      _errorSub!,
+      _positionSub!,
+      _bufferSub!,
+    ]);
   }
 
   // =========================
@@ -408,6 +437,8 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor {
     _videoParamsSub = null;
     _completeSub = null;
     _errorSub = null;
+    _positionSub = null;
+    _bufferSub = null;
   }
 
   // =========================
@@ -620,6 +651,9 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor {
     await _player.setVolume(vol);
   }
 
+  @override
+  Future<void> setPlaybackRate(double rate) => _player.setRate(rate);
+
   // =========================
   // dispose
   // =========================
@@ -654,6 +688,8 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor {
       _completeSubject.close(),
       _widthSubject.close(),
       _heightSubject.close(),
+      _positionSubject.close(),
+      _bufferSubject.close(),
     ]);
   }
 
@@ -690,6 +726,25 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor {
 
   @override
   Stream<int?> get height => _heightSubject.stream;
+
+  @override
+  Stream<Duration> get position => _positionSubject.stream;
+
+  @override
+  Stream<Duration> get bufferPosition => _bufferSubject.stream;
+
+  @override
+  Duration get currentPosition => _positionSubject.value;
+
+  @override
+  bool get isBufferingNow => _loadingSubject.value;
+
+  @override
+  bool get hasAudioTrack => containsPlayableAudioTrackIds(_player.state.tracks.audio.map((track) => track.id));
+
+  static bool containsPlayableAudioTrackIds(Iterable<String> ids) {
+    return ids.any((id) => id != 'auto' && id != 'no');
+  }
 
   @override
   PlayerEngine get engine => PlayerEngine.mediaKit;

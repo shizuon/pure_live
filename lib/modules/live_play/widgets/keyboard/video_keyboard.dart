@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/modules/live_play/controllers/player_state.dart';
@@ -31,6 +34,20 @@ class _VideoKeyboardShortcutsState extends State<VideoKeyboardShortcuts> {
       _handleEscExit();
       return true;
     }
+    if (Platform.isMacOS && event is KeyDownEvent) {
+      final commentary = GlobalPlayerService.instance.commentarySyncController;
+      if (commentary.isEngaged) {
+        final step = HardwareKeyboard.instance.isShiftPressed ? 500 : 100;
+        if (event.logicalKey == LogicalKeyboardKey.bracketLeft) {
+          unawaited(commentary.adjustOffset(-step));
+          return true;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.bracketRight) {
+          unawaited(commentary.adjustOffset(step));
+          return true;
+        }
+      }
+    }
     return false;
   }
 
@@ -45,11 +62,14 @@ class _VideoKeyboardShortcutsState extends State<VideoKeyboardShortcuts> {
   Widget build(BuildContext context) {
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.mediaPlay): () => GlobalPlayerService.instance.player.resume(),
-        const SingleActivator(LogicalKeyboardKey.mediaPause): () => GlobalPlayerService.instance.player.pause(),
+        const SingleActivator(LogicalKeyboardKey.mediaPlay): () =>
+            GlobalPlayerService.instance.commentarySyncController.play(),
+        const SingleActivator(LogicalKeyboardKey.mediaPause): () =>
+            GlobalPlayerService.instance.commentarySyncController.pause(),
         const SingleActivator(LogicalKeyboardKey.mediaPlayPause): () =>
-            GlobalPlayerService.instance.player.togglePlayPause(),
-        const SingleActivator(LogicalKeyboardKey.space): () => GlobalPlayerService.instance.player.togglePlayPause(),
+            GlobalPlayerService.instance.commentarySyncController.togglePlayPause(),
+        const SingleActivator(LogicalKeyboardKey.space): () =>
+            GlobalPlayerService.instance.commentarySyncController.togglePlayPause(),
         const SingleActivator(LogicalKeyboardKey.keyR): () => widget.controller.refresh(),
         const SingleActivator(LogicalKeyboardKey.arrowUp): () async {
           double? volume = await widget.controller.volume();

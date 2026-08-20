@@ -473,7 +473,15 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
   }
 
   Future<void> _playVideo() async {
-    await _playerManager.play(datasource, playUrs, headers, room: room, audioOnly: isAudioOnly);
+    final commentary = GlobalPlayerService.instance.commentarySyncController;
+    await _playerManager.play(
+      datasource,
+      playUrs,
+      headers,
+      room: room,
+      audioOnly: isAudioOnly,
+      startMuted: commentary.isActive,
+    );
   }
 
   /// Rebinds the existing room controller to a freshly-created native player.
@@ -647,6 +655,8 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
 
   Future<double?> volume() async {
     if (PlatformHelper.isDesktop) {
+      final commentary = GlobalPlayerService.instance.commentarySyncController;
+      if (commentary.isEngaged) return commentary.outputVolume;
       return room.getSavedVolume();
     }
     return await _volumeController.getVolume();
@@ -655,12 +665,14 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
   Future<void> setVolume(double value) async {
     final resolved = value.clamp(0.0, 1.0).toDouble();
     if (PlatformHelper.isDesktop) {
-      await _playerManager.setVolume(resolved);
+      final commentary = GlobalPlayerService.instance.commentarySyncController;
+      await commentary.setOutputVolume(resolved);
+      if (!commentary.isEngaged) await room.saveCurrentVolume(resolved);
     } else {
       await _volumeController.setVolume(resolved);
+      await room.saveCurrentVolume(resolved);
     }
     currentVolume.value = resolved;
-    await room.saveCurrentVolume(resolved);
   }
 
   // 亮度管理
@@ -911,6 +923,10 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
 
   // 播放控制
   Future<void> toggleAudioOnly() async {
+    if (GlobalPlayerService.instance.commentarySyncController.isEngaged) {
+      ToastUtil.show(i18n('commentary_audio_only_conflict'));
+      return;
+    }
     if (audioModeSwitching.value) return;
     audioModeSwitching.value = true;
     try {
@@ -946,6 +962,19 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
   }
 
   Future<void> refresh() async {
+    final commentary = GlobalPlayerService.instance.commentarySyncController;
+    if (commentary.isEngaged) {
+      await commentary.resync(
+        reopenPrimary: () async {
+          _livePlayController.invalidateRoomLoad();
+          clearListener();
+          await _playerManager.close();
+          await destory();
+          await _livePlayController.onInitPlayerState(reloadDataType: ReloadDataType.refreash);
+        },
+      );
+      return;
+    }
     _livePlayController.invalidateRoomLoad();
     clearListener();
     await _playerManager.close();
@@ -954,11 +983,14 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
   }
 
   Future<void> changeLine() async {
+    final commentary = GlobalPlayerService.instance.commentarySyncController;
+    commentary.markPrimaryReloading();
     _livePlayController.invalidateRoomLoad();
     clearListener();
     await _playerManager.close();
     await destory();
     await _livePlayController.onInitPlayerState(reloadDataType: ReloadDataType.changeLine, line: currentLineIndex);
+    await commentary.onPrimaryReady();
   }
 
   void clearListener() {

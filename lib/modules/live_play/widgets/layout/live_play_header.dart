@@ -98,6 +98,15 @@ class LivePlayHeader extends StatelessWidget implements PreferredSizeWidget {
   Widget _buildRecordButton() {
     return Obx(() {
       final room = controller.state.value.room.detail;
+      final commentary = GlobalPlayerService.instance.commentarySyncController;
+      if (commentary.state.value.isEngaged) {
+        return IconButton(
+          tooltip: i18n('commentary_recording_disabled'),
+          onPressed: () => ToastUtil.show(i18n('commentary_recording_disabled')),
+          icon: const Icon(Icons.fiber_manual_record_outlined),
+          color: Colors.grey,
+        );
+      }
       return RecordActionButton(
         room: room,
         recorderController: controller.recorderController,
