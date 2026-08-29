@@ -541,6 +541,87 @@ jobs:
             Write-Host "MSIX skipped because signing secrets are not configured."
           }
 
+      - name: Create Windows portable archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $VERSION = "${{ steps.version.outputs.artifact_version }}"
+          $bundle = "build\windows\x64\runner\Release"
+          $portable = "PureLive-$VERSION-windows-x64-portable.zip"
+          $stage = Join-Path $env:RUNNER_TEMP "PureLivePortableStage"
+
+          if (!(Test-Path $bundle -PathType Container)) {
+            Write-Error "Windows release bundle not found: $bundle"
+          }
+
+          Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Get-ChildItem $bundle -Force |
+            Where-Object { $_.Name -notin @("AppData", "IPTV_CACHE") } |
+            Copy-Item -Destination $stage -Recurse -Force
+          Get-ChildItem $stage -Recurse -File |
+            Where-Object { $_.Extension -in @(".exp", ".ilk", ".lib", ".pdb") } |
+            Remove-Item -Force
+
+          Compress-Archive `
+            -Path (Join-Path $stage "*") `
+            -DestinationPath $portable `
+            -CompressionLevel Optimal `
+            -Force
+
+          if (!(Test-Path $portable -PathType Leaf) -or (Get-Item $portable).Length -lt 10MB) {
+            Write-Error "Windows portable archive is missing or implausibly small."
+          }
+
+      - name: Verify final Windows deliverables
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Get-ChildItem -File -Filter "PureLive-*-windows-x64-setup.exe" |
+            Select-Object -First 1
+          $portable = Get-ChildItem -File -Filter "PureLive-*-windows-x64-portable.zip" |
+            Select-Object -First 1
+          if (!$installer -or $installer.Length -lt 10MB) {
+            Write-Error "Final Windows installer is missing or implausibly small."
+          }
+          if (!$portable -or $portable.Length -lt 10MB) {
+            Write-Error "Final Windows portable archive is missing or implausibly small."
+          }
+
+          $installDir = Join-Path $env:RUNNER_TEMP "PureLiveFinalInstallerSmoke"
+          Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
+          $process = Start-Process `
+            -FilePath $installer.FullName `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=$installDir" `
+            -Wait `
+            -PassThru
+          if ($process.ExitCode -ne 0) {
+            Write-Error "Final Windows installer failed with exit code $($process.ExitCode)."
+          }
+
+          $portableDir = Join-Path $env:RUNNER_TEMP "PureLiveFinalPortableSmoke"
+          Remove-Item $portableDir -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -LiteralPath $portable.FullName -DestinationPath $portableDir -Force
+
+          foreach ($candidate in @(
+            (Join-Path $installDir "pure_live.exe"),
+            (Join-Path $portableDir "pure_live.exe")
+          )) {
+            if (!(Test-Path $candidate -PathType Leaf) -or (Get-Item $candidate).Length -lt 1MB) {
+              Write-Error "Verified Windows application is missing or damaged: $candidate"
+            }
+            $stream = [IO.File]::OpenRead($candidate)
+            try {
+              if ($stream.ReadByte() -ne 0x4D -or $stream.ReadByte() -ne 0x5A) {
+                Write-Error "Windows application does not contain a valid PE header: $candidate"
+              }
+            } finally {
+              $stream.Dispose()
+            }
+          }
+
+          Write-Host "Verified final installer and portable package: $($installer.Length) and $($portable.Length) bytes"
+
       # -----------------------------------------------------
       # SHA256
       # -----------------------------------------------------
@@ -564,6 +645,13 @@ jobs:
                 Set-Content "$($_.FullName).sha256"
             }
 
+          Get-ChildItem -File -Filter "PureLive-*-windows-x64-portable.zip" |
+            ForEach-Object {
+              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+              "$hash  $($_.Name)" |
+                Set-Content "$($_.FullName).sha256"
+            }
+
       # -----------------------------------------------------
       # Upload
       # -----------------------------------------------------
@@ -575,10 +663,87 @@ jobs:
           path: |
             PureLive-*-windows-x64-setup.exe
             PureLive-*-windows-x64-setup.exe.sha256
+            PureLive-*-windows-x64-portable.zip
+            PureLive-*-windows-x64-portable.zip.sha256
             PureLive-*-windows-x64.msix
             PureLive-*-windows-x64.msix.sha256
           if-no-files-found: error
           retention-days: 3
+
+  windows_artifact_smoke:
+    name: Verify downloaded Windows artifact
+
+    if: ${{ always() && inputs.build_windows && needs.windows.result == 'success' }}
+
+    needs: [windows]
+
+    runs-on: windows-latest
+
+    timeout-minutes: 15
+
+    steps:
+
+      - name: Download uploaded Windows artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v7.0.1
+        with:
+          name: pure-live-windows
+          path: downloaded-windows
+
+      - name: Verify checksums and install downloaded artifact
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:GITHUB_WORKSPACE "downloaded-windows"
+          $installer = Get-ChildItem $root -Recurse -File -Filter "PureLive-*-windows-x64-setup.exe" |
+            Select-Object -First 1
+          $portable = Get-ChildItem $root -Recurse -File -Filter "PureLive-*-windows-x64-portable.zip" |
+            Select-Object -First 1
+          if (!$installer -or !$portable) {
+            Write-Error "Downloaded Windows artifact is incomplete."
+          }
+
+          foreach ($file in @($installer, $portable)) {
+            $checksumPath = "$($file.FullName).sha256"
+            if (!(Test-Path $checksumPath -PathType Leaf)) {
+              Write-Error "Checksum file is missing: $checksumPath"
+            }
+            $expected = ((Get-Content $checksumPath -Raw).Trim() -split '\s+')[0].ToLower()
+            $actual = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()
+            if ($actual -ne $expected) {
+              Write-Error "Downloaded artifact checksum mismatch: $($file.Name)"
+            }
+          }
+
+          $installDir = Join-Path $env:RUNNER_TEMP "PureLiveDownloadedInstallerSmoke"
+          $process = Start-Process `
+            -FilePath $installer.FullName `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=$installDir" `
+            -Wait `
+            -PassThru
+          if ($process.ExitCode -ne 0) {
+            Write-Error "Downloaded installer failed with exit code $($process.ExitCode)."
+          }
+
+          $portableDir = Join-Path $env:RUNNER_TEMP "PureLiveDownloadedPortableSmoke"
+          Expand-Archive -LiteralPath $portable.FullName -DestinationPath $portableDir -Force
+          foreach ($candidate in @(
+            (Join-Path $installDir "pure_live.exe"),
+            (Join-Path $portableDir "pure_live.exe")
+          )) {
+            if (!(Test-Path $candidate -PathType Leaf) -or (Get-Item $candidate).Length -lt 1MB) {
+              Write-Error "Downloaded package did not produce a valid application: $candidate"
+            }
+            $stream = [IO.File]::OpenRead($candidate)
+            try {
+              if ($stream.ReadByte() -ne 0x4D -or $stream.ReadByte() -ne 0x5A) {
+                Write-Error "Downloaded application has an invalid PE header: $candidate"
+              }
+            } finally {
+              $stream.Dispose()
+            }
+          }
+
+          Write-Host "Downloaded artifact passed checksum, installer, portable archive, and PE validation."
 
 
 # =========================================================
@@ -1339,7 +1504,8 @@ jobs:
       ${{ always() && inputs.create_release &&
           (needs.quality.result == 'success' || needs.quality.result == 'skipped') &&
           (!inputs.build_android || needs.android.result == 'success') &&
-          (!inputs.build_windows || needs.windows.result == 'success') &&
+          (!inputs.build_windows ||
+            (needs.windows.result == 'success' && needs.windows_artifact_smoke.result == 'success')) &&
           (!inputs.build_linux || needs.linux.result == 'success') &&
           (!(inputs.build_macos || inputs.build_ios) || needs.apple.result == 'success') }}
 
@@ -1347,6 +1513,7 @@ jobs:
       - quality
       - android
       - windows
+      - windows_artifact_smoke
       - linux
       - apple
 
