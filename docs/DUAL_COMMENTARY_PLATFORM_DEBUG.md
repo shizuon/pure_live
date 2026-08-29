@@ -2,8 +2,8 @@
 
 ## 当前实现基线
 
-- 上游基线：`liuchuancong/pure_live` `master`，提交 `59d4158885050428bd72b3f837ea27ddeccc2157`。
-- 应用版本：`2.3.0+4069`。
+- 上游基线：`liuchuancong/pure_live` `master`，提交 `fac506c76085a547af06ba8541473a836e108c16`。
+- 应用版本：`3.0.7+4095`（功能验证分支，不等同于正式 Release）。
 - Flutter：`3.47.0`。
 - 平台状态：macOS 为正式验证目标；Windows、iOS/iPadOS 已开放实验入口，Android 仍保持关闭。
 - 工作模式：A 播放主画面，B 提供解说声音；B 的低清画面仅在校准窗口显示。
@@ -20,14 +20,15 @@
 - 弹幕断线后固定每 15 秒重连，手动关闭或离开房间后停止重连。
 - 双流期间禁止录制；仅音频模式与双流模式互斥。
 - 虎牙 FLV/HLS 使用各自匹配的令牌和扩展名，虎牙 CDN 地址升级为 HTTPS。
+- 虎牙优先使用 3 秒内可取得的 WUP 新签名；请求失败后 30 秒内直接复用 2.9.8 的页面签名路径，避免 3.0.7 对页面签名二次计算及无限等待。
+- Windows 恢复 2.9.8 的有界 MediaKit 纹理尺寸，并以 180ms 去抖处理窗口拖动；不自动切换虎牙线路。
 - macOS 禁用 Impeller 宽色域合成，固定使用 Skia Metal 的 sRGB/BGRA8 表面，避免 HDR 显示器窗口模式下双视频纹理损坏旁侧弹幕 UI；MediaKit 的 `auto-copy` 解码保持不变。
 
-## 本轮构建与自动化验证（2026-08-20）
+## 上一轮构建与本轮验证状态
 
-- `flutter analyze --no-pub`：通过，无静态检查问题。
-- `flutter test --no-pub`：177 项全部通过，覆盖 10ms 偏移显示/执行、平台白名单、双播放器生命周期、弹幕延迟/重连和音频模式切换。
-- macOS Release：构建通过，版本 `2.3.0+4069`，主程序同时包含 `arm64` 与 `x86_64`，应用内 `FLTEnableImpeller=false` 已核验，ad-hoc 深度签名验证通过。
-- iOS Release：在非 FileProvider 临时目录执行 `flutter build ios --release --no-codesign --no-pub` 成功，生成 `arm64` 设备版 `Runner.app`。这证明代码和原生依赖可编译，不等同于真机行为验收。
+- 2026-08-29：最新上游 `fac506c7` 已通过真实 merge 进入双流功能分支；虎牙、Windows 纹理、10ms、弹幕源、15 秒重连和上游滚动边界定向测试通过。
+- 本文最终交付时回填本轮 Analyze、完整测试和 macOS Release 产物；未完成的证据不能沿用旧版本结果。
+- 上一轮 iOS Release 曾在非 FileProvider 临时目录执行无签名构建成功；它只证明当时的代码和原生依赖可编译，不代表当前提交或真机行为已经验收。
 - Windows：功能入口、控制器和快捷键已迁移，平台白名单单测通过；macOS 无法生成或运行 Windows 桌面包，仍需在 Windows 机器执行下方构建及长时间播放清单。
 
 如果工程位于 macOS 的 Documents/FileProvider 目录，系统可能给 `.app` 或 `.framework` 自动附加 Finder 扩展属性，导致 Xcode 临时签名报告 `resource fork ... not allowed`。这是构建目录问题，不是播放器代码错误；将验证副本放到 `/private/tmp` 或其他非同步目录即可避免。
@@ -45,13 +46,14 @@
 3. 在仓库根目录执行依赖解析、静态检查和 Windows Release 构建。
 4. 首次构建前确认 MediaKit Windows 原生库已经解析完成。
 
-建议命令：
+建议使用仓库锁定依赖的命令：
 
 ```powershell
-fvm flutter pub get
-fvm flutter analyze
-fvm flutter test
-fvm flutter build windows --release
+.\tool\flutterw.ps1 pub get --enforce-lockfile
+.\tool\flutterw.ps1 analyze --no-pub --no-fatal-infos --no-fatal-warnings
+.\tool\flutterw.ps1 test --no-pub --concurrency=12
+PowerShell -ExecutionPolicy Bypass -File .\tool\build_local_release.ps1 `
+  -Target WindowsX64 -Configuration Release -SkipQuality
 ```
 
 ### 3. 优先验证项
@@ -62,7 +64,7 @@ fvm flutter build windows --release
 4. 空格、媒体键、刷新和悬浮窗关闭是否同时控制两路。
 5. A 切清晰度或线路时，B 和当前偏移是否保留。
 6. 反复进入、退出双流 20 次，任务管理器中不能持续增加播放器、网络连接或音频输出。
-7. 虎牙线路 1～6 分别播放至少 10 分钟，记录 FLV/HLS、编码格式、错误文本和发生时间。
+7. 虎牙线路 1～6 分别播放至少 30 分钟，记录 FLV/HLS、编码格式、错误文本和发生时间；不要把线路 4～6 正常当成线路 1～3 已修复。
 
 Windows 需要确认不同键盘布局下 `LogicalKeyboardKey.bracketLeft/right` 以及 Alt 修饰键都能收到事件。
 

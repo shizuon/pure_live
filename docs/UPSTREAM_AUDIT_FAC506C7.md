@@ -53,7 +53,7 @@
 
 | Issue / Bug | 版本与日期 | 维护分支状态 | 来源分类 | 首次错误状态 / 根因 | 代码落点 | 结论 |
 | --- | --- | --- | --- | --- | --- | --- |
-| [#815](https://github.com/liuchuancong/pure_live/issues/815) | 3.0.7, Windows x64, 2026-08-29 | present | upstream-existing | 虎牙 AL CDN（显示线路 1/2）连接失败或数分钟后停止；视频停止但弹幕会话继续。2.9.8→3.0.7 同时删除 Windows 纹理视口约束并多次改写 live demuxer 属性，最新上游仍保留这些差异。真实根因须分开验证网络输入是否继续与纹理是否继续呈现。 | Huya URL/令牌；MediaKit live properties；Windows video texture | 采用 WUP 新令牌但保留安全 URL；恢复非 seekable live 属性和有界 Windows 输出，禁止用自动换线掩盖 |
+| [#815](https://github.com/liuchuancong/pure_live/issues/815) | 3.0.7, Windows x64, 2026-08-29 | present | upstream-existing | 2.9.8 原样使用页面签名；3.0.7 首次对每条页面签名二次计算，同时删除 Windows 有界纹理输出。用户证据显示线路 1/2 失败而 4～6 正常，视频停止但独立弹幕继续。`force-seekable=yes` 在 2.9.8 已存在，因此排除为版本回归根因。 | Huya URL/令牌；Windows video texture | WUP 新签名成功时才重算；超时则恢复 2.9.8 页面签名；恢复有界 Windows 输出；禁止自动换线 |
 | [#816](https://github.com/liuchuancong/pure_live/issues/816) | 3.0.7, Windows x64, 2026-08-29 | present | upstream-existing | 与 #815 同根因；用户证据显示线路 4 正常，支持 CDN/令牌差异而非弹幕或房间生命周期 | 同上 | 与 #815 合并修复和验证 |
 | macOS HDR 窗口闪烁 | 双流迁移功能 | already-fixed | fork-regression | Impeller 宽色域窗口合成 MediaKit 双纹理时闪烁 | `macos/Runner/Info.plist` | 保留 `FLTEnableImpeller=false`，上游布局调整不得覆盖 |
 
@@ -73,13 +73,13 @@
 - 资源释放：公共滚动物理不持有资源；WebSocket Timer/订阅继续由 stop/close 释放；Windows resize Timer 必须在 dispose 取消。
 - 性能与网络请求：WUP 令牌按 stream 合并并短时缓存，避免线路列表并发重复请求；不新增播放期轮询或自动换线。
 - 数据迁移：无。
-- 更优方案与决定：对虎牙采用“新鲜 WUP 令牌优先、协议页面令牌后备、HTTPS 与参数归一化”；对 MediaKit 用可测试的 live property policy，不把文件流属性混入直播流。
+- 更优方案与决定：对虎牙采用“新鲜 WUP 令牌优先、3 秒硬超时、30 秒失败冷却、协议页面签名原样后备、HTTPS 与参数归一化”；保留 2.9.8 与 3.0.7 相同的 MediaKit live property，不把无版本差异的属性误报为根因。
 
 ## conflict_resolution
 
 - 预期文本冲突：`live_play_controller.dart`、`live_play_video.dart`、控制面板和虎牙文件。
 - 无文本冲突但存在的语义冲突：上游虎牙 URL 构造撤销 HTTPS/协议令牌/参数去重；上游布局可能遮蔽双流入口。
-- 最终候选结果：接受分类滚动、首页刷新、虎牙解析和令牌缓存；重写虎牙 URL 策略并保留全部双流功能。
+- 最终候选结果：接受分类滚动、首页刷新、虎牙解析和令牌缓存；适配虎牙 URL 策略、恢复 Windows 有界纹理并保留全部双流功能。
 - 版本、更新源、签名和发布资产：没有上游变化，不调整。
 
 ## regression_plan
@@ -103,7 +103,7 @@
 
 ## 合并结论
 
-- 最终 merge 提交：合并完成后回填。
+- 最终 merge 提交：`7d00b7b256263153da0a7276db54c9ac90ec7980`。
 - 接受：滚动边界、首页刷新、虎牙解析容错和令牌请求合并。
 - 适配/重写：虎牙 URL、双流相邻 UI、弹幕生命周期、MediaKit live 属性与 Windows 输出尺寸。
 - 已知限制：未在 Windows x64 实机复现；因此自动化修复完成后仍标为“待用户长播验证”，不提前关闭 #815/#816。
