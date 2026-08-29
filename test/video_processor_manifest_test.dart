@@ -17,8 +17,8 @@ void main() {
 
   test('normal retries never merge segments from an older attempt', () {
     final files = <File>[
-      File(r'C:\records\20260827_080000_001_000000.ts'),
-      File(r'C:\records\20260827_080001_002_000000.ts'),
+      File('/records/20260827_080000_001_000000.ts'),
+      File('/records/20260827_080001_002_000000.ts'),
     ];
 
     expect(
@@ -26,7 +26,7 @@ void main() {
         candidates: files,
         filePrefix: '20260827_080001_002',
       ).map((file) => file.path),
-      [r'C:\records\20260827_080001_002_000000.ts'],
+      ['/records/20260827_080001_002_000000.ts'],
     );
     expect(VideoProcessorService.selectAttemptSegments(candidates: files, filePrefix: 'missing'), isEmpty);
     expect(

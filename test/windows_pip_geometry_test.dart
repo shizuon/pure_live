@@ -55,6 +55,11 @@ void main() {
       'windowsPipHeight': 360.0,
       'windowsPipX': -600.0,
       'windowsPipY': 120.0,
+      'portraitDisplayId': '',
+      'portraitWidth': 0.0,
+      'portraitHeight': 0.0,
+      'portraitX': 0.0,
+      'portraitY': 0.0,
     });
     expect(config['windowsPipDisplayId'], '');
   });

@@ -81,7 +81,7 @@ void main() {
     );
 
     final json = task.toJson();
-    expect(json['schemaVersion'], 3);
+    expect(json['schemaVersion'], 4);
     expect(json['lastErrorStage'], 'ffmpeg');
     expect(json['lastError'], contains('[stream-url]'));
     expect(json['lastError'], isNot(contains('secret')));

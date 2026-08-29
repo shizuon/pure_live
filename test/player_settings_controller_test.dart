@@ -44,32 +44,27 @@ void main() {
       expect(optedOutConfig['rememberPipPosition'], isFalse);
     });
 
-    test('migrates old backups to the safe portrait-source defaults', () {
+    test('migrates old backups to the current portrait defaults', () {
       final config = PlayerSettingsController.extractConfig({'player': <String, dynamic>{}});
 
-      expect(config['enablePortraitStreamAdaptation'], isTrue);
-      expect(config['portraitAdaptiveHeight'], isTrue);
       expect(config['portraitLayoutMode'], 'balanced');
-      expect(config['portraitFullscreenPolicy'], 'followSource');
-      expect(config['portraitPipFollowSource'], isTrue);
       expect(config['portraitDanmakuMode'], 'followGlobal');
-      expect(config['portraitRoomOverrides'], isEmpty);
+      expect(config['portraitVideoHeightMode'], 'adaptive');
+      expect(config['portraitCustomHeight'], 0.0);
     });
 
-    test('sanitizes invalid portrait enum names while retaining room overrides', () {
+    test('sanitizes invalid current portrait enum names', () {
       final config = PlayerSettingsController.extractConfig({
         'player': <String, dynamic>{
           'portraitLayoutMode': 'broken',
-          'portraitFullscreenPolicy': 'broken',
           'portraitDanmakuMode': 'broken',
-          'portraitRoomOverrides': <String, String>{'bilibili:1': 'portrait'},
+          'portraitVideoHeightMode': 'broken',
         },
       });
 
       expect(config['portraitLayoutMode'], 'balanced');
-      expect(config['portraitFullscreenPolicy'], 'followSource');
       expect(config['portraitDanmakuMode'], 'followGlobal');
-      expect(config['portraitRoomOverrides'], <String, String>{'bilibili:1': 'portrait'});
+      expect(config['portraitVideoHeightMode'], 'adaptive');
     });
   });
 }
