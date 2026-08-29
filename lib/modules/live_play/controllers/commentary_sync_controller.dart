@@ -14,10 +14,17 @@ import 'package:pure_live/player/models/player_engine.dart';
 import 'package:pure_live/player/models/player_slot.dart';
 
 class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlaybackReloadDelegate {
-  CommentarySyncController({required this.primaryManager, required this.playerPool, StreamSourceResolver? resolver})
-    : resolver = resolver ?? const StreamSourceResolver() {
+  CommentarySyncController({
+    required this.primaryManager,
+    required this.playerPool,
+    StreamSourceResolver? resolver,
+    bool Function()? platformSupportProbe,
+  }) : resolver = resolver ?? const StreamSourceResolver(),
+       _platformSupportProbe = platformSupportProbe ?? _defaultPlatformSupportProbe {
     _primaryLoadingSubscription = primaryManager.onLoading.distinct().listen(_handlePrimaryLoading);
   }
+
+  static bool _defaultPlatformSupportProbe() => CommentaryPlatformSupport.isSupported;
 
   static const int minOffsetMs = -30000;
   static const int maxOffsetMs = 30000;
@@ -29,6 +36,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   final PlayerManager primaryManager;
   final PlayerPool playerPool;
   final StreamSourceResolver resolver;
+  final bool Function() _platformSupportProbe;
 
   final Rx<CommentarySyncState> state = const CommentarySyncState().obs;
 
@@ -62,7 +70,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   final List<StreamSubscription<dynamic>> _companionSubscriptions = [];
   late final StreamSubscription<bool> _primaryLoadingSubscription;
 
-  bool get isSupported => CommentaryPlatformSupport.isSupported;
+  bool get isSupported => _platformSupportProbe();
   bool get isEngaged => state.value.isEngaged;
   bool get isActive => state.value.isActive;
   bool get isPlaying => primaryManager.isPlayingNow;

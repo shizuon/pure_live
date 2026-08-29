@@ -24,7 +24,12 @@ void main() {
     final companion = _SyncPlayer(position: const Duration(seconds: 27));
     final pool = PlayerPool(factory: (_) async => companion);
     final manager = _PlayerManager(primary: primary, pool: pool);
-    final controller = CommentarySyncController(primaryManager: manager, playerPool: pool, resolver: const _Resolver());
+    final controller = CommentarySyncController(
+      primaryManager: manager,
+      playerPool: pool,
+      resolver: const _Resolver(),
+      platformSupportProbe: () => true,
+    );
     final videoRoom = LiveRoom(roomId: 'video', platform: 'test', nick: 'A');
     final audioRoom = LiveRoom(roomId: 'audio', platform: 'test', nick: 'B');
 
@@ -70,7 +75,12 @@ void main() {
     final companion = _SyncPlayer(position: const Duration(seconds: 27));
     final pool = PlayerPool(factory: (_) async => companion);
     final manager = _PlayerManager(primary: primary, pool: pool);
-    final controller = CommentarySyncController(primaryManager: manager, playerPool: pool, resolver: const _Resolver());
+    final controller = CommentarySyncController(
+      primaryManager: manager,
+      playerPool: pool,
+      resolver: const _Resolver(),
+      platformSupportProbe: () => true,
+    );
     final activation = controller.activate(
       videoRoom: LiveRoom(roomId: 'video', platform: 'test'),
       audioRoom: LiveRoom(roomId: 'audio', platform: 'test'),
