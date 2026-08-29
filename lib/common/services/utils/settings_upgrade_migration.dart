@@ -26,13 +26,24 @@ class SettingsUpgradeReport {
 /// migration understands both layouts and unions data found in previous
 /// installation directories.
 class SettingsUpgradeMigration {
-  static const int schemaVersion = 4;
+  static const int schemaVersion = 5;
   static const String _schemaKey = 'settingsUpgradeSchema';
   static const String _sourceLedgerKey = 'settingsUpgradeImportedSources';
 
   static const Set<String> _objectListKeys = {'favoriteRooms', 'favoriteAreas', 'historyRooms', 'webDavConfigs'};
 
   static const Set<String> _stringListKeys = {'shieldList', 'blockedDanmakuUsers', 'hotAreasList', 'savedMenuIds'};
+
+  // A previous installation is useful for recovering missing collections, but
+  // it must never replace an explicitly stored volume preference in the active
+  // installation. Doing so can resurrect an old global mute together with zero
+  // defaults and make every room silent after an otherwise successful update.
+  static const Set<String> _currentVolumeKeys = {
+    'globalVolumeMute',
+    'defaultDesktopVolume',
+    'defaultMobileVolume',
+    'roomVolumes',
+  };
 
   static Future<SettingsUpgradeReport> migrate({
     required Box<dynamic> target,
@@ -79,6 +90,8 @@ class SettingsUpgradeMigration {
       preferRichestSourceScalars: hadLegacyShape,
     );
 
+    _repairSilentVolumeTrap(merged, previousSchema: targetData[_schemaKey]);
+
     importedFingerprints.addAll(sources.map((source) => source.fingerprint));
     merged[_schemaKey] = schemaVersion;
     merged[_sourceLedgerKey] = jsonEncode(importedFingerprints.toList()..sort());
@@ -112,6 +125,7 @@ class SettingsUpgradeMigration {
         if (_isMigrationKey(entry.key) || _objectListKeys.contains(entry.key) || _stringListKeys.contains(entry.key)) {
           continue;
         }
+        if (_currentVolumeKeys.contains(entry.key) && current.containsKey(entry.key)) continue;
         result[entry.key] = entry.value;
       }
     }
@@ -152,6 +166,25 @@ class SettingsUpgradeMigration {
     }
 
     return result;
+  }
+
+  static void _repairSilentVolumeTrap(Map<String, dynamic> settings, {required dynamic previousSchema}) {
+    final schema = previousSchema is num ? previousSchema.toInt() : 0;
+    if (schema >= schemaVersion) return;
+
+    final desktop = settings['defaultDesktopVolume'];
+    final mobile = settings['defaultMobileVolume'];
+    final muted = settings['globalVolumeMute'] == true;
+    final desktopSilent = desktop is num && desktop <= 0;
+    final mobileSilent = mobile is num && mobile <= 0;
+    if (!muted || !desktopSilent || !mobileSilent) return;
+
+    // This exact combination is a dead end in the old UI: disabling global
+    // mute restores another zero and the player appears permanently broken.
+    // Repair it once on upgrade; users can still intentionally mute afterwards.
+    settings['globalVolumeMute'] = false;
+    settings['defaultDesktopVolume'] = 1.0;
+    settings['defaultMobileVolume'] = 0.5;
   }
 
   static List<Map<String, dynamic>> _mergeObjectLists(String key, Iterable<List<Map<String, dynamic>>> lists) {

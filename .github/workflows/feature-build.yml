@@ -461,9 +461,37 @@ jobs:
       - name: Package Windows EXE and optional MSIX
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $targets = if ($env:HAS_MSIX_CERTIFICATE -eq 'true') { 'exe,msix' } else { 'exe' }
           Write-Host "Packaging Windows targets: $targets"
           fastforge package --platform windows --targets $targets
+
+          $installer = Get-ChildItem dist -Recurse -File -Filter "*-windows-setup.exe" |
+            Sort-Object Length -Descending |
+            Select-Object -First 1
+          if (!$installer -or $installer.Length -lt 10MB) {
+            Write-Error "Windows installer is missing or implausibly small."
+          }
+
+          $smokeDir = Join-Path $env:RUNNER_TEMP "PureLiveInstallerSmoke"
+          $process = Start-Process `
+            -FilePath $installer.FullName `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=$smokeDir" `
+            -Wait `
+            -PassThru
+          if ($process.ExitCode -ne 0) {
+            Write-Error "Windows installer smoke test failed with exit code $($process.ExitCode)."
+          }
+
+          $installedExe = Join-Path $smokeDir "pure_live.exe"
+          if (!(Test-Path $installedExe) -or (Get-Item $installedExe).Length -lt 1MB) {
+            Write-Error "Installer completed but the installed application is missing or damaged."
+          }
+          $header = [IO.File]::ReadAllBytes($installedExe)[0..1]
+          if ($header[0] -ne 0x4D -or $header[1] -ne 0x5A) {
+            Write-Error "Installed application does not contain a valid PE header."
+          }
+          Write-Host "Verified installer and installed PE: $($installer.Length) bytes -> $((Get-Item $installedExe).Length) bytes"
 
       # -----------------------------------------------------
       # Rename
@@ -480,11 +508,13 @@ jobs:
           $EXE_FILE = Get-ChildItem `
             $DIST_DIR `
             -Recurse `
-            -Filter "*.exe" |
+            -File `
+            -Filter "*-windows-setup.exe" |
+            Sort-Object Length -Descending |
             Select-Object -First 1
 
-          if (!$EXE_FILE) {
-            Write-Error "Windows EXE package not found."
+          if (!$EXE_FILE -or $EXE_FILE.Length -lt 10MB) {
+            Write-Error "Windows EXE package not found or damaged."
           }
 
           Copy-Item `

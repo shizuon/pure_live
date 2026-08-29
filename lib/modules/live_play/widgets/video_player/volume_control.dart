@@ -92,16 +92,33 @@ class _OverlayVolumeControlState extends State<OverlayVolumeControl> {
     });
   }
 
-  void _handleToggleMute() {
+  Future<void> _handleToggleMute() async {
+    final volumeSettings = SettingsService.to.vol;
     setState(() {
       if (_volume > 0) {
         _lastVolume = _volume;
         _volume = 0;
       } else {
-        _volume = _lastVolume > 0 ? _lastVolume : 0.5;
+        final platformDefault = PlatformUtils.isMobile
+            ? volumeSettings.defaultMobileVolume.v
+            : volumeSettings.defaultDesktopVolume.v;
+        _volume = _lastVolume > 0 ? _lastVolume : (platformDefault > 0 ? platformDefault : 0.5);
       }
     });
-    controller.setVolume(_volume);
+
+    // The overlay controls the actual output users are looking at. If an old
+    // settings migration left global mute enabled, raising this control must
+    // also release that latch; otherwise the next room is immediately silent
+    // again even though this icon showed a successful unmute.
+    if (_volume > 0 && volumeSettings.globalVolumeMute.v) {
+      if (PlatformUtils.isMobile && volumeSettings.defaultMobileVolume.v <= 0) {
+        volumeSettings.defaultMobileVolume.v = _volume;
+      } else if (PlatformUtils.isDesktop && volumeSettings.defaultDesktopVolume.v <= 0) {
+        volumeSettings.defaultDesktopVolume.v = _volume;
+      }
+      volumeSettings.globalVolumeMute.v = false;
+    }
+    await controller.setVolume(_volume);
     _overlayEntry?.markNeedsBuild();
   }
 
