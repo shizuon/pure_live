@@ -11,7 +11,6 @@ import 'package:pure_live/player/core/engine_fallback_manager.dart';
 import 'package:pure_live/player/core/line_fallback_manager.dart';
 import 'package:pure_live/player/core/player_manager.dart';
 import 'package:pure_live/player/core/player_pool.dart';
-import 'package:pure_live/player/core/preload_player_manager.dart';
 import 'package:pure_live/player/interface/sync_capable_player.dart';
 import 'package:pure_live/player/interface/unified_player_interface.dart';
 import 'package:pure_live/player/models/player_engine.dart';
@@ -116,13 +115,14 @@ class _Resolver extends StreamSourceResolver {
 class _PlayerManager extends PlayerManager {
   _PlayerManager({required this.primary, required PlayerPool pool})
     : super(
-        playerPool: pool,
         fallbackManager: EngineFallbackManager(
           defaultEngine: PlayerEngine.mediaKit,
           supportedEngines: const [PlayerEngine.mediaKit],
         ),
-        preloadManager: PreloadPlayerManager(),
         lineManager: LineFallbackManager(),
+        playerCreator: (_) async => primary,
+        audioModeServiceSync: (_, _) async {},
+        audioSessionStart: (_) async {},
       );
 
   final _SyncPlayer primary;
@@ -220,7 +220,10 @@ class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer {
   Future<void> setPlaybackRate(double rate) async {}
 
   @override
-  Widget getVideoWidget() => const SizedBox.shrink();
+  Widget getVideoWidget(BoxFit fit) => const SizedBox.shrink();
+
+  @override
+  PlayerEngine get engine => PlayerEngine.mediaKit;
 
   @override
   bool get isInitialized => true;

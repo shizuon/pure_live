@@ -108,5 +108,8 @@ class _FakePlayer implements UnifiedPlayer {
   Future<void> stop() async {}
 
   @override
-  Widget getVideoWidget() => const SizedBox.shrink();
+  Widget getVideoWidget(BoxFit fit) => const SizedBox.shrink();
+
+  @override
+  PlayerEngine get engine => PlayerEngine.mediaKit;
 }
