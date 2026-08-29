@@ -24,12 +24,17 @@
 - Windows 恢复 2.9.8 的有界 MediaKit 纹理尺寸，并以 180ms 去抖处理窗口拖动；不自动切换虎牙线路。
 - macOS 禁用 Impeller 宽色域合成，固定使用 Skia Metal 的 sRGB/BGRA8 表面，避免 HDR 显示器窗口模式下双视频纹理损坏旁侧弹幕 UI；MediaKit 的 `auto-copy` 解码保持不变。
 
-## 上一轮构建与本轮验证状态
+## 本轮构建与验证状态
 
-- 2026-08-29：最新上游 `fac506c7` 已通过真实 merge 进入双流功能分支；虎牙、Windows 纹理、10ms、弹幕源、15 秒重连和上游滚动边界定向测试通过。
-- 本文最终交付时回填本轮 Analyze、完整测试和 macOS Release 产物；未完成的证据不能沿用旧版本结果。
+- 2026-08-29：最新上游 `fac506c7` 已通过真实 merge 进入双流功能分支；当前功能分支 HEAD 为 `26483728`。
+- `flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings`：通过，无静态检查问题。
+- `flutter test --no-pub --concurrency=12`：`442/442` 全部通过。覆盖虎牙 URL/签名/WUP 缓存与失败冷却、Windows 纹理尺寸、双流同步、10ms、A/B 弹幕源、B 弹幕延迟、15 秒弹幕重连、HDR 和最新上游滚动修复。
+- macOS Release 已完成原生编译。工程位于 FileProvider 管理的 Documents 目录，Xcode 最后一步因框架被自动附加 `com.apple.FinderInfo`/`com.apple.fileprovider.fpfs#P` 而拒绝签名；将完整 `.app` 复制到 `/private/tmp`、清除扩展属性并重新临时签名后，`codesign --verify --deep --strict` 通过。
+- macOS 产物版本为 `3.0.7 (4095)`，`FLTEnableImpeller=false`，主程序为 `arm64 + x86_64` 通用二进制。
+- 可测试压缩包：`/Users/shizuon/Documents/Codex/2026-08-14/gou-s/artifacts/PureLive-3.0.7-dual-commentary-upstream-fac506c7-macos-universal-20260829.zip`（101 MiB）。
+- 压缩包 SHA-256：`ce4825979c320fcf6257a08355116af7ef9e4e15f2c0e46ff9978d0b7fda4eb3`；`unzip -tq` 完整性检查通过。
 - 上一轮 iOS Release 曾在非 FileProvider 临时目录执行无签名构建成功；它只证明当时的代码和原生依赖可编译，不代表当前提交或真机行为已经验收。
-- Windows：功能入口、控制器和快捷键已迁移，平台白名单单测通过；macOS 无法生成或运行 Windows 桌面包，仍需在 Windows 机器执行下方构建及长时间播放清单。
+- Windows：功能入口、控制器、快捷键、虎牙签名修复和纹理尺寸修复已迁移，相关单测通过；macOS 无法生成或运行 Windows 桌面包，仍需在 Windows 机器执行下方构建及长时间播放清单。
 
 如果工程位于 macOS 的 Documents/FileProvider 目录，系统可能给 `.app` 或 `.framework` 自动附加 Finder 扩展属性，导致 Xcode 临时签名报告 `resource fork ... not allowed`。这是构建目录问题，不是播放器代码错误；将验证副本放到 `/private/tmp` 或其他非同步目录即可避免。
 
