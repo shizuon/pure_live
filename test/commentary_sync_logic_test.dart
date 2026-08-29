@@ -79,4 +79,15 @@ void main() {
     expect(MediaKitAdapter.containsPlayableAudioTrackIds(['auto', 'no']), isFalse);
     expect(MediaKitAdapter.containsPlayableAudioTrackIds(['auto', '1', 'no']), isTrue);
   });
+
+  test('commentary identity follows the player controls visibility', () {
+    expect(shouldShowCommentarySyncBadge(controlsVisible: true, menuOpen: false, controlsLocked: false), isTrue);
+    expect(
+      shouldShowCommentarySyncBadge(controlsVisible: false, menuOpen: true, controlsLocked: false),
+      isTrue,
+      reason: 'an open player menu keeps the rest of the controls visible',
+    );
+    expect(shouldShowCommentarySyncBadge(controlsVisible: false, menuOpen: false, controlsLocked: false), isFalse);
+    expect(shouldShowCommentarySyncBadge(controlsVisible: true, menuOpen: false, controlsLocked: true), isFalse);
+  });
 }

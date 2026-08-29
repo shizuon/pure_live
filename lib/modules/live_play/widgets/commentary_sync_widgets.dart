@@ -53,6 +53,14 @@ bool _isRecording(LiveRoom room) {
       task?.status == RecordStatus.preparing;
 }
 
+bool shouldShowCommentarySyncBadge({
+  required bool controlsVisible,
+  required bool menuOpen,
+  required bool controlsLocked,
+}) {
+  return (controlsVisible || menuOpen) && !controlsLocked;
+}
+
 class CommentarySyncBadge extends StatelessWidget {
   const CommentarySyncBadge({super.key, required this.controller});
 
@@ -65,6 +73,11 @@ class CommentarySyncBadge extends StatelessWidget {
     return Obx(() {
       final state = sync.state.value;
       if (!state.isEngaged) return const SizedBox.shrink();
+      final visible = shouldShowCommentarySyncBadge(
+        controlsVisible: controller.showController.value,
+        menuOpen: controller.isMenuOpen.value,
+        controlsLocked: controller.showLocked.value,
+      );
       final danmakuRoom = danmaku.selectedSource.value == CommentaryDanmakuSource.commentary
           ? state.audioRoom
           : state.videoRoom;
@@ -79,29 +92,38 @@ class CommentarySyncBadge extends StatelessWidget {
               '${i18n('commentary_danmaku')}: ${danmakuRoom?.nick ?? '-'}  ·  '
               '${formatCommentaryOffset(state.offsetMs)}',
       };
-      return Positioned(
-        top: 58,
+      return AnimatedPositioned(
+        top: visible ? 58 : -48,
         left: 16,
         right: 16,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
         child: Align(
           alignment: Alignment.topCenter,
-          child: GestureDetector(
-            onTap: () => Get.dialog(CommentarySyncDialog(controller: controller)),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 620),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: state.status == CommentarySyncStatus.error
-                    ? Colors.red.shade800
-                    : Colors.black.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white24),
-              ),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white),
+          child: IgnorePointer(
+            ignoring: !visible,
+            child: AnimatedOpacity(
+              opacity: visible ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: GestureDetector(
+                onTap: () => Get.dialog(CommentarySyncDialog(controller: controller)),
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 620),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: state.status == CommentarySyncStatus.error
+                        ? Colors.red.shade800
+                        : Colors.black.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
               ),
             ),
           ),
