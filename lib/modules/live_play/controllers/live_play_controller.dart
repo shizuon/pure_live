@@ -212,7 +212,7 @@ class LivePlayController extends GetxController
   }
 
   void _initTab() {
-    tabController = TabController(length: tabs.length, vsync: this);
+    tabController = TabController(length: tabs.length, vsync: this, animationDuration: pureLiveTabTransitionDuration);
   }
 
   Future<void> _initCore() async {
@@ -640,7 +640,6 @@ class LivePlayController extends GetxController
 
     try {
       final fetchedRoom = await currentSite.liveSite.getRoomDetail(roomId: roomId, platform: requestedPlatform);
-
       var liveRoom = fetchedRoom.withAudienceFallbackFrom(requestedRoom);
       liveRoom = liveRoom.fillFromDetail(requestedRoom);
       if (!_isRoomLoadCurrent(loadEpoch, roomId, requestedPlatform)) return liveRoom;
