@@ -123,10 +123,6 @@ jobs:
       - name: Resolve locked packages
         run: flutter pub get --enforce-lockfile
 
-      - name: Prefetch verified Firebase C++ SDK
-        shell: pwsh
-        run: .\tool\prefetch_windows_native.ps1
-
       - name: Generate production AppConfig
         run: |
           dart run enven \
@@ -303,13 +299,16 @@ jobs:
 # =========================================================
 
   windows:
-    name: Windows EXE + MSIX
+    name: Windows EXE + optional MSIX
 
     if: ${{ always() && inputs.build_windows && (needs.quality.result == 'success' || needs.quality.result == 'skipped') && (needs.android.result == 'success' || needs.android.result == 'skipped') }}
 
     needs: [quality, android]
 
     runs-on: windows-latest
+
+    env:
+      HAS_MSIX_CERTIFICATE: ${{ secrets.CERTIFICATE != '' && secrets.CERTIFICATE_PASSWORD != '' }}
 
     timeout-minutes: 35
 
@@ -322,6 +321,7 @@ jobs:
       # -----------------------------------------------------
 
       - name: Decode MSIX Certificate
+        if: ${{ env.HAS_MSIX_CERTIFICATE == 'true' }}
         shell: pwsh
         env:
           CERTIFICATE: ${{ secrets.CERTIFICATE }}
@@ -345,6 +345,7 @@ jobs:
           "FINAL_CERT_PATH=$certPath" >> $env:GITHUB_ENV
 
       - name: Update MSIX make_config.yaml
+        if: ${{ env.HAS_MSIX_CERTIFICATE == 'true' }}
         shell: pwsh
         env:
           CERT_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
@@ -391,6 +392,10 @@ jobs:
 
       - name: Resolve locked packages
         run: flutter pub get --enforce-lockfile
+
+      - name: Prefetch verified Firebase C++ SDK
+        shell: pwsh
+        run: .\tool\prefetch_windows_native.ps1
 
       - name: Generate production AppConfig
         run: |
@@ -452,12 +457,12 @@ jobs:
       # Package
       # -----------------------------------------------------
 
-      - name: Package Windows EXE and MSIX
+      - name: Package Windows EXE and optional MSIX
         shell: pwsh
         run: |
-          fastforge package `
-            --platform windows `
-            --targets exe,msix
+          $targets = if ($env:HAS_MSIX_CERTIFICATE -eq 'true') { 'exe,msix' } else { 'exe' }
+          Write-Host "Packaging Windows targets: $targets"
+          fastforge package --platform windows --targets $targets
 
       # -----------------------------------------------------
       # Rename
@@ -492,14 +497,18 @@ jobs:
             -Filter "*.msix" |
             Select-Object -First 1
 
-          if (!$MSIX_FILE) {
+          if ($env:HAS_MSIX_CERTIFICATE -eq 'true' -and !$MSIX_FILE) {
             Write-Error "Windows MSIX package not found."
           }
 
-          Copy-Item `
-            $MSIX_FILE.FullName `
-            "PureLive-$VERSION-windows-x64.msix" `
-            -Force
+          if ($MSIX_FILE) {
+            Copy-Item `
+              $MSIX_FILE.FullName `
+              "PureLive-$VERSION-windows-x64.msix" `
+              -Force
+          } else {
+            Write-Host "MSIX skipped because signing secrets are not configured."
+          }
 
       # -----------------------------------------------------
       # SHA256
