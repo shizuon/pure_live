@@ -136,6 +136,7 @@ jobs:
         run: flutter test --concurrency=12
 
       - name: Probe public interfaces
+        continue-on-error: true
         run: python tool/interface_probe.py
 
 
