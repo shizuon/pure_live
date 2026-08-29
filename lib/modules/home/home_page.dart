@@ -13,7 +13,6 @@ import 'package:pure_live/common/global/initialized.dart';
 import 'package:pure_live/player/models/player_engine.dart';
 import 'package:pure_live/modules/popular/popular_page.dart';
 import 'package:pure_live/modules/favorite/favorite_page.dart';
-import 'package:pure_live/modules/about/widgets/version_dialog.dart';
 import 'package:pure_live/recorder/pages/recorder/recorder_page.dart';
 import 'package:pure_live/common/services/settings/refresh_config_controller.dart';
 
@@ -27,7 +26,6 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   Timer? _debounceTimer;
   Timer? _resumeRefreshTimer;
-  Timer? _updateCheckTimer;
   final FavoriteController favoriteController = Get.find<FavoriteController>();
   late final VoidCallback _favoriteTabListener;
   Worker? _savedMenuWorker;
@@ -70,16 +68,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin,
         if (!mounted) return;
         await AppNavigator.toLiveRoomDetail(liveRoom: initialRoom);
       }
-    });
-
-    // Give the visible room snapshot first use of the network and build
-    // isolate. The update check is low-priority background work and previously
-    // competed with the cold-start room verification and image requests.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _updateCheckTimer = Timer(const Duration(seconds: 2), () {
-        if (mounted) unawaited(addToOverlay());
-      });
     });
 
     _favoriteTabListener = () {
@@ -136,7 +124,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin,
     if (_selectedIndex < 0 || _selectedIndex >= HomeMenu.values.length) return;
     final menu = HomeMenu.values[_selectedIndex];
     _resumeRefreshTimer?.cancel();
-    _updateCheckTimer?.cancel();
     _resumeRefreshTimer = Timer(const Duration(milliseconds: 450), () {
       if (!mounted) return;
       if (menu == HomeMenu.popular && Get.isRegistered<PopularController>()) {
@@ -181,30 +168,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin,
       setState(() => _selectedIndex = index);
     }
     favoriteController.tabBottomIndex.value = index;
-  }
-
-  Future<void> addToOverlay() async {
-    final overlay = Overlay.maybeOf(context);
-    late OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (context) => Container(
-        alignment: Alignment.center,
-        color: Colors.black54,
-        child: NewVersionDialog(entry: entry),
-      ),
-    );
-    await VersionUtil.initPackageInfo();
-    await VersionUtil().checkUpdate();
-    bool isHasNerVersion = SettingsService.to.app.enableAutoCheckUpdate.v && VersionUtil.hasNewVersion();
-    if (mounted) {
-      if (overlay != null && isHasNerVersion) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => overlay.insert(entry));
-      } else {
-        if (overlay != null && isHasNerVersion) {
-          overlay.insert(entry);
-        }
-      }
-    }
   }
 
   void onBackButtonPressed(bool didPop, _) async {
@@ -280,7 +243,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin,
     _savedMenuWorker?.dispose();
     _debounceTimer?.cancel();
     _resumeRefreshTimer?.cancel();
-    _updateCheckTimer?.cancel();
     super.dispose();
   }
 }

@@ -5,7 +5,7 @@ import 'package:pure_live/modules/live_play/widgets/content_first_panel_layout.d
 import 'package:pure_live/modules/live_play/widgets/video_player/video_controller_panel.dart';
 
 void main() {
-  testWidgets('portrait danmaku section tabs fill the row and stay horizontally fixed', (tester) async {
+  testWidgets('portrait danmaku section tabs stay centered and horizontally fixed', (tester) async {
     const tabs = <String>['弹幕列表', '醒目留言', '弹幕设置', '屏蔽管理'];
     await tester.pumpWidget(
       const MaterialApp(
@@ -21,7 +21,7 @@ void main() {
     final finder = find.byKey(const ValueKey('live-danmaku-section-tabs'));
     final tabBar = tester.widget<TabBar>(finder);
     expect(tabBar.isScrollable, isFalse);
-    expect(tabBar.tabAlignment, TabAlignment.fill);
+    expect(tabBar.tabAlignment, TabAlignment.center);
     for (final label in tabs) {
       expect(find.text(label), findsOneWidget);
     }

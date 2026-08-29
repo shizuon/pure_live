@@ -64,12 +64,6 @@ class GeneralSettingsPage extends GetView<SettingsService> {
               icon: Remix.rocket_2_line,
             ),
             context.buildSwitchTile(
-              title: i18n('enable_auto_check_update'),
-              subtitle: "",
-              value: SettingsService.to.app.enableAutoCheckUpdate,
-              icon: Remix.refresh_line,
-            ),
-            context.buildSwitchTile(
               title: i18n('use_github_origin_for_updates'),
               subtitle: i18n('use_github_origin_for_updates_desc'),
               value: SettingsService.to.app.useGitHubOriginForUpdates,
