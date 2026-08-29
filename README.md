@@ -1,78 +1,174 @@
-<p align="center">
-  <img src="assets/icons/icon.png" width="128" alt="Pure Live 图标">
-</p>
+这是 [liuchuancong/pure_live](https://github.com/liuchuancong/pure_live) 的功能性 fork。项目保留上游的多平台直播聚合能力，本仓库目前只重点维护一件事：**替换音频流**——用直播间 A 的画面搭配直播间 B 的声音。
 
-<h1 align="center">Pure Live · 双流解说版</h1>
+为什么要做这个功能，其实也没什么复杂的理由：比赛官方流画质不错，但是想听 6657；开两个网页自己静音、切窗口、对延迟，调完半天图一乐比赛已经打完了。
 
-<p align="center">
-  看 A 直播间的高清画面，听 B 直播间的解说。
-</p>
+比如你正在看某个赛事官方直播间：
 
-<p align="center">
-  <a href="https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml">
-    <img alt="Build" src="https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml/badge.svg">
-  </a>
-  <a href="LICENSE">
-    <img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg">
-  </a>
-  <a href="https://github.com/liuchuancong/pure_live">
-    <img alt="Upstream" src="https://img.shields.io/badge/upstream-liuchuancong%2Fpure__live-lightgrey.svg">
-  </a>
-</p>
+- 官方直播：有高清画面
+- 6657：有 Machine 解说
+- 你：两个都想要
+- 浏览器开两个窗口：😭
+- 手动静音：😭
+- 两边自己对时间：😭
+- Pure Live 双流解说：😎👍
 
-这是 [liuchuancong/pure_live](https://github.com/liuchuancong/pure_live) 的功能性 fork。项目保留上游的多平台直播聚合能力，本仓库只重点维护“替换音频流”：用直播间 A 的画面搭配直播间 B 的声音，主要用于更顺畅地观看主播“玩机器”的直播。
+**爽！这才叫直播！**
+
+所以干脆：
+
+官方、别的二路（哇肉铺子💤）：出画面。\
+6657：出声音。\
+弹幕：讨论祥子。
 
 ## 双流解说
 
-macOS 是已验证目标；Windows、iOS/iPadOS 已开放迁移测试。进入直播间 A 后，从关注列表中选择在线的直播间 B 作为解说源：
+macOS 是目前已经实际验证的目标平台；Windows、iOS / iPadOS 已开放迁移测试。进入直播间 A 后，可以从关注列表选择一个在线直播间 B 作为解说源：**A 继续负责画面、标题、画质和线路，B 负责声音。**
 
-- A 继续提供画面、标题、画质和线路；B 提供声音。
-- 校准时可临时查看 B 的画面，对照屏幕时间戳调整。
-- 支持 `10ms`、`100ms`、`500ms` 步长，可随时重新校准或更换 B。
-- 可选择显示 A 或 B 的弹幕；选择 B 时，弹幕延迟跟随双流偏移。
-- B 连接失败时恢复 A 的声音；双流模式不支持录制。
+最典型的用法就是看赛事官方高清流，同时听 Machine 解说。不会因为选择了 B 就突然把画面切成 6657，主播负责嘴就行了，没让主播负责脸。
 
-更完整的操作和平台测试说明见[双流解说平台调试与移植](docs/DUAL_COMMENTARY_PLATFORM_DEBUG.md)。
+两个直播间的直播延迟显然不可能一致，因此校准时可以临时查看 B 的画面，对照比赛画面、屏幕时间戳或者实际事件调整偏移。目前支持 `10ms`、`100ms`、`500ms` 三档步长，可以随时重新校准，也可以直接换一个 B。
+
+`10ms`：我就微调一下。\
+`100ms`：感觉差一点。\
+`500ms`：哥们你这已经不是音画不同步了，你这是两个平行宇宙。
+
+### 弹幕看谁的
+
+双流模式下可以选择显示 A 或 B 的弹幕。
+
+选择 A，基本就是正常看比赛：A 在打什么，弹幕聊什么。
+
+正常。\
+非常正常。\
+甚至正常得不像直播间。
+
+选择 B 也可以。如果 B 是 6657，那情况可能稍微发生一点变化。
+
+比赛画面：
+
+> Spirit vs Falcons
+
+弹幕：
+
+> 丰川祥子\
+> 爆了？\
+> 这也能输啊\
+> 一进来就看到……\
+> 银行业\
+> 🏹🏹🏹
+
+主播说主播的。\
+弹幕聊弹幕的。
+
+**互不打扰。**
+
+选择 B 时，弹幕时间会跟随当前双流偏移一起调整。比如 B 的声音被延迟了 2 秒，B 的弹幕也会一起延迟 2 秒，主要是为了避免：
+
+> 弹幕：爆了！！！！\
+> 画面：五个人还在家里买枪。
+
+这种提前剧透式残局。
+
+如果 B 连接失败，会自动恢复 A 原本的声音，不至于解说流一炸整个播放器突然进入默片时代。之后可以重新连接或者更换解说源。
+
+双流模式目前**不支持录制**。
+
+更完整的操作方式、同步逻辑以及各平台测试记录见：[双流解说平台调试与移植](https://github.com/shizuon/pure_live/blob/master/docs/DUAL_COMMENTARY_PLATFORM_DEBUG.md)。
 
 ## 维护范围
 
-本仓库的长期维护目标只有双流解说及其直接相关的播放、同步和弹幕问题。
+本仓库长期维护目标只有**双流解说及其直接相关的播放、同步和弹幕问题**。不是 Pure Live Plus，不是 Pure Live Ultimate，更不是“既然 fork 了那顺手把整个软件重新维护一遍”，我的终点就到这里了。
 
-其他问题也可以在本仓库提出，我们会先判断问题属于本 fork 还是上游：
+其他问题仍然可以在本仓库提出，我们会先判断到底是这个 fork 自己爆了，还是上游已经爆了：
 
-- 有人反馈且上游已经修复的问题，会在确认不破坏双流功能后合并相应修复。
-- 平时不主动追随上游的每次提交。上下游都包含较多 AI 辅助改动，维护者没有时间持续逐项审查；未经审查地频繁同步容易引入冲突和回归。
-- 范围小、能明确验证的问题，如果在本仓库完成修复，会尽量向上游提交 Pull Request。
-- 大型问题、通用功能需求或与双流无关的系统性问题，建议直接提交到[上游 Issues](https://github.com/liuchuancong/pure_live/issues/new/choose)。
+- 如果有人反馈，并且上游已经存在对应修复，会先确认修改不会顺手把双流功能一起抬走，再合并相关修复。
+- 平时不会主动追随上游每一次提交。上下游目前都存在较多 AI 辅助改动，AI 写代码本身没什么，问题是维护者没有时间每天对着几十个 commit 玩扫雷。未经审查地频繁同步，很容易得到“上游修了三个问题，本 fork 新增五个问题”的现代软件工程奇观。
+- 范围小、能够稳定复现并明确验证的问题，如果在本仓库完成修复，会尽量把通用部分向上游提交 Pull Request。
+- 大型问题、通用功能需求或者和双流完全无关的系统性问题，建议直接提交到 [上游 Issues](https://github.com/liuchuancong/pure_live/issues/new/choose)。
 
-提问题时请附上平台、应用版本、直播平台和房间号、复现步骤及日志。请勿公开 Cookie、Token 或其他账号凭据。
+所以这里的同步原则基本就是：**需要再拿，拿了先测。**
+
+而不是：
+
+`git fetch upstream`\
+`git merge upstream/master`
+
+😮哦？
+
+**爆了**
+
+提 Issue 时请附上平台、应用版本、直播平台和房间号、复现步骤以及相关日志。双流问题最好顺便说明 A/B 分别是什么房间、两边单独播放是否正常、问题出在画面/声音/弹幕哪一侧。不要只留一句“不能用了”，然后维护者和你共同参与大型有奖竞猜。
+
+另外请勿公开 Cookie、Token 或其他账号凭据。GitHub Issue 是公开页面，不要为了证明登录失败把 Cookie 整段贴出来。
+
+这个不是烂梗。
+
+这个是真能爆。
 
 ## 上游与许可证
 
-- 上游项目：[liuchuancong/pure_live](https://github.com/liuchuancong/pure_live)。本仓库是其衍生版本，不代表上游，也不由上游维护或提供支持。
-- 本仓库根目录的 [LICENSE](LICENSE) 是 **GNU Affero General Public License v3.0（AGPL-3.0）** 正文。本 fork 继续以该许可证发布；复制、修改、分发或提供网络服务前，请阅读并遵守许可证原文。
-- 原项目和各次修改的著作权归相应贡献者所有。本说明不改变提交历史、版权声明或许可证条款。
-- 仓库包含的第三方依赖和内置组件可能使用各自的许可证；相关条款以各组件目录中的 `LICENSE` 及其上游声明为准。
-- 这是非官方第三方客户端，与各直播平台没有隶属或授权关系。直播内容、平台名称和商标归各自权利人所有，使用时请遵守所在地法律及平台规则。
+上游项目：[liuchuancong/pure_live](https://github.com/liuchuancong/pure_live)。本仓库是其衍生版本，不代表上游，也不由上游维护或提供支持。
 
-以上只是项目关系和仓库现状说明，不是法律意见；许可证权利和义务以 [AGPL-3.0 原文](LICENSE)为准。
+因此如果这个 fork 的双流功能坏了，请不要跑去上游：
+
+> 你们这个 6657 模式怎么没声音？
+
+上游维护者：
+
+> 😮哦？
+
+本仓库根目录的 [LICENSE](https://github.com/shizuon/pure_live/blob/master/LICENSE) 是 **GNU Affero General Public License v3.0（AGPL-3.0）** 正文，本 fork 继续以该许可证发布。复制、修改、分发或以网络服务形式提供前，请阅读并遵守许可证原文。
+
+原项目以及各次修改的著作权归相应贡献者所有。本 README 只是说明项目关系和当前仓库状态，不会因为写了几句烂话就改变 Git 提交历史、版权声明或者许可证条款。
+
+仓库中的第三方依赖和内置组件也可能使用各自的许可证，具体以组件目录中的 `LICENSE` 以及对应上游声明为准。不是根目录写 AGPL，就代表依赖树里所有东西突然一夜之间全 AGPL 了。
+
+**License 不是野榜。**
+
+本项目是非官方第三方客户端，与各直播平台之间不存在隶属或授权关系。直播内容、平台名称和商标归相应权利人所有，使用本项目时请遵守所在地法律以及对应平台规则。
+
+以上只是项目关系和仓库现状说明，**不是法律意见**；许可证具体权利与义务以 [AGPL-3.0 原文](https://github.com/shizuon/pure_live/blob/master/LICENSE) 为准。这段建议真看一下，别“感觉应该没问题”。
 
 ## 下载与构建
 
 - 测试包：[本仓库 Releases](https://github.com/shizuon/pure_live/releases)
 - 自动构建：[GitHub Actions](https://github.com/shizuon/pure_live/actions)
-- 开发、构建和历史测试记录：[文档索引](docs/README.md)
-- 旧维护阶段的流程存档：[MAINTENANCE_POLICY.md](MAINTENANCE_POLICY.md)（其中的维护范围已经被本 README 取代）
+- 开发、构建和历史测试记录：[文档索引](https://github.com/shizuon/pure_live/blob/master/docs/README.md)
+- 旧维护阶段流程存档：[MAINTENANCE_POLICY.md](https://github.com/shizuon/pure_live/blob/master/MAINTENANCE_POLICY.md)
 
-项目使用 Flutter。工具链版本以 `.fvmrc`、`pubspec.lock` 和平台构建配置为准：
+`MAINTENANCE_POLICY.md` 中的维护范围已经被当前 README 取代，它现在属于历史文档。不要考古完以后发现两份文件写得不一样，然后开始：
+
+哦？改口了？
+
+项目使用 Flutter，具体工具链版本以 `.fvmrc`、`pubspec.lock` 和平台构建配置为准。不要拿一个不知道哪年装的 Flutter SDK 跑炸以后直接宣布项目兵败如山倒。
 
 ```bash
 flutter pub get
 flutter test
-flutter build macos   # macOS
-flutter build windows # Windows（需在 Windows 上执行）
+flutter build macos
 ```
+
+Windows 构建需要在 Windows 环境执行：
+
+```bash
+flutter build windows
+```
+
+目前没支持“在 macOS 上凭借强烈的主观愿望生成 Windows 构建”。
 
 ## 致谢
 
-感谢 [Pure Live 上游项目](https://github.com/liuchuancong/pure_live)及所有原作者、维护者和贡献者。没有上游工作，就没有这个功能性 fork。
+感谢 [Pure Live 上游项目](https://github.com/liuchuancong/pure_live) 以及所有原作者、维护者和贡献者。没有上游工作，就没有这个功能性 fork。
+
+这句没什么好玩梗的，是真的。
+
+总之，如果你的需求就是：
+
+**我要官方比赛流的画质。**\
+**我要 6657 的声音。**
+
+那这个 fork 基本就是为了这个需求存在的。A 出画面，B 出声音，延迟自己调，弹幕自己选，B 炸了回 A。
+
+至于为什么为了看一个主播，最后 fork 了一个 Flutter 项目、写了双流同步、弹幕延迟和跨平台迁移……
+
+**来都来了。**

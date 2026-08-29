@@ -113,7 +113,7 @@ $contributingText = Get-Content -LiteralPath (Join-Path $repoRoot 'CONTRIBUTING.
 $agentText = Get-Content -LiteralPath (Join-Path $repoRoot 'AGENTS.md') -Raw
 $upstreamAuditTemplate = Get-Content -LiteralPath (Join-Path $repoRoot 'docs\UPSTREAM_AUDIT_TEMPLATE.md') -Raw
 foreach ($entry in @(
-    [pscustomobject]@{ Name = 'README'; Text = $readmeText; Markers = @('双流解说', 'liuchuancong/pure_live', 'AGPL-3.0', '平时不主动追随上游的每次提交', '尽量向上游提交 Pull Request', 'MAINTENANCE_POLICY.md', 'issues/new/choose') },
+    [pscustomobject]@{ Name = 'README'; Text = $readmeText; Markers = @('双流解说', 'liuchuancong/pure_live', 'AGPL-3.0', '平时不会主动追随上游每一次提交', '会尽量把通用部分向上游提交 Pull Request', 'MAINTENANCE_POLICY.md', 'issues/new/choose') },
     [pscustomobject]@{ Name = 'CONTRIBUTING'; Text = $contributingText; Markers = @('contribution-policy-markers', 'maintenance-bug-only', 'bug-triage', 'upstream-review', 'feature-routing', 'integration-conflict') },
     [pscustomobject]@{ Name = 'AGENTS'; Text = $agentText; Markers = @('Maintenance scope and triage', 'MAINTENANCE_POLICY.md', 'not-reproduced', 'bugfix-android-release-default') },
     [pscustomobject]@{ Name = 'upstream audit template'; Text = $upstreamAuditTemplate; Markers = @('file_review', 'semantic_change_ledger', 'issue_and_bug_mapping', 'fork_feature_impact', 'quality_assessment', 'disposition', 'conflict_resolution', 'regression_plan', 'verification_plan') }
