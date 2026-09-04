@@ -1,3 +1,21 @@
+# Pure Live v3.0.15
+
+v3.0.15 build 4103 是双流解说与桌面发布修正版。本轮发布 Windows x64 与 macOS Universal 安装包。
+
+## 修复与改进
+
+- 修复旧设置迁移后普通直播也可能保持全局静音、默认音量为零的问题；首次启动会恢复可用音量，音量按钮也会真正解除全局静音。
+- Windows 安装器改为验证最终重命名文件，并在上传后由独立 Windows runner 重新下载、核对 SHA-256、静默安装和检查主程序；同时提供免安装 ZIP。
+- 保留双流解说、10/100/500 ms 校准、A/B 弹幕源与播放器控制栏联动等功能。
+
+## 验证范围
+
+- Windows：最终安装器静默安装、上传后重新下载安装、portable 解压、主程序大小及 PE/MZ 头。
+- macOS：Universal 应用、DMG/ZIP 结构、签名与 SHA-256。
+- 本轮不发布 Android、Linux 或 iOS 安装包。
+
+---
+
 # Pure Live v3.0.14
 
 v3.0.14 build 4102 是 Android 播放器来源隔离、解码恢复与录制故障分层修正版。本轮只构建 `arm64-v8a` Release APK；其他平台继续使用既有安装包。

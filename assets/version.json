@@ -1,61 +1,53 @@
 {
-  "version": "3.0.8",
-  "build_number": 4096,
-  "version_num": 300084096,
-  "android_abis": [
-    "armeabi-v7a",
-    "arm64-v8a",
-    "x86_64"
-  ],
-  "version_desc": "version: 3.0.8\n版本更新：\n- 修复huya断流",
+  "version": "3.0.15",
+  "build_number": 4103,
+  "version_num": 300154103,
+  "android_abis": [],
+  "version_desc": "version: 3.0.15\n版本更新：\n- 修复旧设置迁移导致的全局静音\n- 完善 Windows 安装包完整性验证\n- 发布 Windows 与 macOS 双流解说版本",
   "prerelease": false,
-  "download_url": "https://github.com/liuchuancong/pure_live/releases/tag/v3.0.8",
+  "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15",
   "platforms": {
     "android": {
-      "version": "3.0.8",
-      "build_number": 4096,
-      "version_num": 300084096,
-      "version_desc": "version: 3.0.8\n版本更新：\n- 修复huya断流",
+      "version": "3.0.15",
+      "build_number": 4103,
+      "version_num": 300154103,
+      "version_desc": "本轮未发布 Android 安装包",
       "prerelease": false,
-      "download_url": "https://github.com/liuchuancong/pure_live/releases/tag/v3.0.8",
-      "android_abis": [
-        "armeabi-v7a",
-        "arm64-v8a",
-        "x86_64"
-      ]
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15",
+      "android_abis": []
     },
     "windows": {
-      "version": "3.0.8",
-      "build_number": 4096,
-      "version_num": 300084096,
-      "version_desc": "version: 3.0.8\n版本更新：\n- 修复huya断流",
+      "version": "3.0.15",
+      "build_number": 4103,
+      "version_num": 300154103,
+      "version_desc": "修复静音配置迁移并完善安装包完整性验证",
       "prerelease": false,
-      "download_url": "https://github.com/liuchuancong/pure_live/releases/tag/v3.0.8",
-      "windows_msix_available": true
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15",
+      "windows_msix_available": false
     },
     "linux": {
-      "version": "3.0.8",
-      "build_number": 4096,
-      "version_num": 300084096,
-      "version_desc": "version: 3.0.8\n版本更新：\n- 修复huya断流",
+      "version": "3.0.15",
+      "build_number": 4103,
+      "version_num": 300154103,
+      "version_desc": "本轮未发布 Linux 安装包",
       "prerelease": false,
-      "download_url": "https://github.com/liuchuancong/pure_live/releases/tag/v3.0.8"
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
     },
     "macos": {
-      "version": "3.0.8",
-      "build_number": 4096,
-      "version_num": 300084096,
-      "version_desc": "version: 3.0.8\n版本更新：\n- 修复huya断流",
+      "version": "3.0.15",
+      "build_number": 4103,
+      "version_num": 300154103,
+      "version_desc": "修复静音配置迁移并发布双流解说版本",
       "prerelease": false,
-      "download_url": "https://github.com/liuchuancong/pure_live/releases/tag/v3.0.8"
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
     },
     "ios": {
-      "version": "3.0.8",
-      "build_number": 4096,
-      "version_num": 300084096,
-      "version_desc": "version: 3.0.8\n版本更新：\n- 修复huya断流",
+      "version": "3.0.15",
+      "build_number": 4103,
+      "version_num": 300154103,
+      "version_desc": "本轮未发布 iOS 安装包",
       "prerelease": false,
-      "download_url": "https://github.com/liuchuancong/pure_live/releases/tag/v3.0.8"
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
     }
   }
 }

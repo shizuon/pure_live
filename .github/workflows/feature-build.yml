@@ -49,7 +49,7 @@ on:
         description: Release tag (e.g. v1.0.0) – required if create_release is true
         required: true
         type: string
-        default: 'v3.0.14'
+        default: 'v3.0.15'
 
   push:
     tags:
@@ -1553,8 +1553,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: master
+          ref: ${{ github.sha }}
           fetch-depth: 0
+
+      - name: Match release tag to application version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version:[[:space:]]*\([0-9][0-9.]*\)+[0-9][0-9]*$/\1/p' pubspec.yaml)"
+          test -n "$version"
+          test "${{ inputs.release_tag }}" = "v$version"
 
       # -----------------------------------------------------
       # Download artifacts
@@ -1653,7 +1661,7 @@ jobs:
           |版本|下载地址|
           |---|---|
           |TV版|[pure_live_TV](https://github.com/liuchuancong/pure_live_TV/releases/latest)|
-          |Windows/macOS/Android/iOS版|[pure_live](https://github.com/liuchuancong/pure_live/releases/latest)|
+          |Windows/macOS版|[本 fork](https://github.com/${{ github.repository }}/releases/latest)|
 
           ### 🖥️ Windows 版
 
@@ -1705,6 +1713,7 @@ jobs:
         with:
           tag_name: ${{ inputs.release_tag }}
           name: ${{ inputs.release_tag }}
+          target_commitish: ${{ github.sha }}
 
           body_path: ${{ steps.release_body.outputs.body_path }}
 
