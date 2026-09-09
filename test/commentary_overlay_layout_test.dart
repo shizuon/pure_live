@@ -5,6 +5,29 @@ import 'package:pure_live/modules/live_play/states/commentary_overlay_layout.dar
 import 'package:pure_live/modules/live_play/states/commentary_sync_state.dart';
 
 void main() {
+  test('nine crop handles resize or translate inside the source', () {
+    const crop = Rect.fromLTRB(0.2, 0.2, 0.7, 0.8);
+    for (final handle in CropHandle.values) {
+      for (final delta in [const Offset(-10, -10), const Offset(10, 10)]) {
+        final result = CommentaryOverlayLayout.adjustCrop(crop, handle, delta);
+        expect(result.left, greaterThanOrEqualTo(0));
+        expect(result.top, greaterThanOrEqualTo(0));
+        expect(result.right, lessThanOrEqualTo(1));
+        expect(result.bottom, lessThanOrEqualTo(1));
+        expect(result.width, greaterThanOrEqualTo(0.02 - 1e-9));
+        expect(result.height, greaterThanOrEqualTo(0.02 - 1e-9));
+        if (handle == CropHandle.center) {
+          expect(result.width, closeTo(crop.width, 1e-9));
+          expect(result.height, closeTo(crop.height, 1e-9));
+        }
+      }
+    }
+    final resized = CommentaryOverlayLayout.adjustCrop(crop, CropHandle.right, const Offset(0.1, 0.1));
+    expect(resized.right, closeTo(0.8, 1e-9));
+    expect(resized.left, crop.left);
+    expect(resized.top, crop.top);
+    expect(resized.bottom, crop.bottom);
+  });
   test('crop accepts reverse drags and clamps to source, not letterbox', () {
     final crop = CommentaryOverlayLayout.selection(
       const Offset(800, 450),

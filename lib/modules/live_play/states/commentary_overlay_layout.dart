@@ -1,6 +1,20 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+enum CropHandle {
+  topLeft,
+  top,
+  topRight,
+  left,
+  center,
+  right,
+  bottomLeft,
+  bottom,
+  bottomRight;
+
+  Offset get position => Offset((index % 3) / 2, (index ~/ 3) / 2);
+}
+
 /// Session-only coordinates, independent of window size and stream resolution.
 class CommentaryOverlayLayout {
   const CommentaryOverlayLayout({
@@ -34,6 +48,23 @@ class CommentaryOverlayLayout {
       crop.bottom <= 1 &&
       crop.width >= 0.02 &&
       crop.height >= 0.02;
+
+  static Rect adjustCrop(Rect crop, CropHandle handle, Offset delta) {
+    if (!validCrop(crop) || !delta.isFinite) return crop;
+    if (handle == CropHandle.center) {
+      return crop.shift(Offset(delta.dx.clamp(-crop.left, 1 - crop.right), delta.dy.clamp(-crop.top, 1 - crop.bottom)));
+    }
+    final position = handle.position;
+    // Leave a sub-pixel epsilon so subtraction cannot round below validCrop's
+    // minimum and hide the handles at the smallest selection size.
+    const minimum = 0.020000001;
+    return Rect.fromLTRB(
+      position.dx == 0 ? (crop.left + delta.dx).clamp(0, math.max(0, crop.right - minimum)) : crop.left,
+      position.dy == 0 ? (crop.top + delta.dy).clamp(0, math.max(0, crop.bottom - minimum)) : crop.top,
+      position.dx == 1 ? (crop.right + delta.dx).clamp(math.min(1, crop.left + minimum), 1) : crop.right,
+      position.dy == 1 ? (crop.bottom + delta.dy).clamp(math.min(1, crop.top + minimum), 1) : crop.bottom,
+    );
+  }
 
   Rect bounds(Size viewport, double sourceAspectRatio) {
     final ratio = sourceAspectRatio * crop.width / crop.height;

@@ -93,12 +93,13 @@ void main() {
     ]);
     expect(companion.audioOnlyModes.last, isFalse);
 
-    await controller.exit();
+    await Future.wait([controller.exit(), controller.dispose(), controller.dispose()]);
     expect(manager.lastVolume, 0.6);
     expect(companion.disposed, isTrue);
     expect(controller.state.value.overlayEnabled, isFalse);
     expect(controller.state.value.overlayEditing, isFalse);
 
+    await controller.exit(); // A late route close after application cleanup is harmless.
     await controller.dispose();
   }, timeout: const Timeout(Duration(seconds: 8)));
 
@@ -176,6 +177,12 @@ void main() {
     final rect = tester.getRect(selection);
     await tester.dragFrom(rect.topLeft + const Offset(40, 40), const Offset(200, 150));
     await tester.pump();
+    for (final handle in CropHandle.values) {
+      expect(find.byKey(ValueKey('commentary-crop-handle-${handle.name}')), findsOneWidget);
+    }
+    await tester.drag(find.byKey(const ValueKey('commentary-crop-handle-right')), const Offset(30, 0));
+    await tester.pump();
+    expect(controller.state.value.overlayEnabled, isFalse, reason: 'adjustments require explicit confirmation');
     await tester.tap(find.text('覆盖到 A 画面'));
     await tester.pumpAndSettle();
     expect(controller.state.value.overlayEnabled, isTrue);
@@ -189,6 +196,14 @@ void main() {
     await tester.pump();
     expect(controller.state.value.overlayLayout.widthFraction, greaterThan(0.25));
     expect(tester.getSize(move).width, greaterThan(oldWidth));
+    // Repeat both reparenting directions with an actual single-subscription
+    // stream, as created by MediaKitAdapter.getVideoWidget (not a bare box).
+    await controller.beginOverlayCrop();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('覆盖到 A 画面'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
     await show(controls: false);
     await tester.pumpAndSettle();
     expect(move, findsOneWidget);
@@ -288,7 +303,10 @@ class _OverlayController implements CommentarySyncController {
 class _PreviewPlayer implements UnifiedPlayer {
   const _PreviewPlayer();
   @override
-  Widget getVideoWidget(BoxFit fit) => const SizedBox.expand(key: ValueKey('test-companion-video'));
+  Widget getVideoWidget(BoxFit fit) => StreamBuilder<int>(
+    stream: Stream.value(1920),
+    builder: (_, _) => const SizedBox.expand(key: ValueKey('test-companion-video')),
+  );
   @override
   Stream<int?> get width => Stream.value(1920);
   @override

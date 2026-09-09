@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:pure_live/common/services/desktop_shutdown.dart';
+
 import 'package:pure_live/common/index.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -13,6 +15,8 @@ class Utils {
 
   static Future<void> exitDesktopApplication() async {
     if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) return;
+
+    await DesktopShutdown.beforeExit?.call();
 
     try {
       await HivePrefUtil.flush().timeout(const Duration(seconds: 2));

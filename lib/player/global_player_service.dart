@@ -22,6 +22,7 @@ class GlobalPlayerService {
   PlayerManager get player => playerManager;
   bool _initialized = false;
   Future<void>? _initializationFuture;
+  Future<void>? _disposeFuture;
 
   bool get initialized => _initialized;
 
@@ -67,6 +68,12 @@ class GlobalPlayerService {
 
   /// Global dispose - Call this only when the app is being destroyed
   Future<void> dispose() async {
+    final initialization = _initializationFuture;
+    if (initialization != null) await initialization;
+    await (_disposeFuture ??= _dispose());
+  }
+
+  Future<void> _dispose() async {
     if (!_initialized) return;
     await commentarySyncController.dispose();
     playerManager.controlDelegate = null;

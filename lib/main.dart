@@ -1,5 +1,10 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:ui' show AppExitResponse;
+
+import 'package:pure_live/common/services/desktop_shutdown.dart';
+import 'package:pure_live/plugins/db_service.dart';
+import 'package:pure_live/common/utils/hive_pref_util.dart';
 
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/common/consts/app_consts.dart';
@@ -45,6 +50,23 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with DesktopWindowMixin {
   StreamSubscription<SharedMedia>? _sharedMediaSubscription;
+  AppLifecycleListener? _exitListener;
+  bool _shuttingDown = false;
+  late final _shutdown = DesktopShutdown(
+    detachViews: () async {
+      if (mounted) {
+        setState(() => _shuttingDown = true);
+        // A minimized window may not receive another frame. The fence only
+        // waits for widget detach; resource disposal below is always awaited.
+        await WidgetsBinding.instance.endOfFrame.timeout(const Duration(seconds: 1), onTimeout: () {});
+      }
+    },
+    closeResources: () async {
+      await GlobalPlayerService.instance.dispose();
+      if (Get.isRegistered<DbService>()) await Get.find<DbService>().close();
+      await HivePrefUtil.flush();
+    },
+  );
 
   @override
   void initState() {
@@ -61,6 +83,18 @@ class _MyAppState extends State<MyApp> with DesktopWindowMixin {
       }
     });
     if (PlatformUtils.isDesktop) {
+      DesktopShutdown.beforeExit = _shutdown.run;
+      _exitListener = AppLifecycleListener(
+        onExitRequested: () async {
+          try {
+            await _shutdown.run();
+            return AppExitResponse.exit;
+          } catch (error, stack) {
+            FlutterError.reportError(FlutterErrorDetails(exception: error, stack: stack));
+            return AppExitResponse.cancel;
+          }
+        },
+      );
       DesktopManager.initializeListeners(this);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(DesktopManager.updateTrayWhenLocalized());
@@ -86,6 +120,8 @@ class _MyAppState extends State<MyApp> with DesktopWindowMixin {
 
   @override
   void dispose() {
+    _exitListener?.dispose();
+    DesktopShutdown.beforeExit = null;
     if (PlatformUtils.isDesktop) {
       DesktopManager.disposeListeners();
     }
@@ -163,6 +199,9 @@ class _MyAppState extends State<MyApp> with DesktopWindowMixin {
             navigatorObservers: [FlutterSmartDialog.observer, LiveRouteObserver()],
             builder: FlutterSmartDialog.init(
               builder: (context, child) {
+                // Keep GetMaterialApp/its service registry alive until cleanup
+                // completes; only unmount the route's video/query consumers.
+                if (_shuttingDown) return const SizedBox.shrink();
                 Widget resultWidget = child ?? const SizedBox.shrink();
                 if (PlatformUtils.isDesktopNotMac) {
                   resultWidget = DesktopManager.buildWithTitleBar(resultWidget);

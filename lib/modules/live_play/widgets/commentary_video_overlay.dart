@@ -65,7 +65,9 @@ class _SourceSizedOverlay extends StatefulWidget {
 }
 
 class _SourceSizedOverlayState extends State<_SourceSizedOverlay> {
-  late final video = widget.player.getVideoWidget(BoxFit.contain);
+  // Cache the player, not its widget: the adapter builds a single-subscription
+  // dimensions stream. Re-mounting that same StreamBuilder after crop/preview
+  // would listen twice and replace the video with a release-mode ErrorWidget.
   late final sizes = CombineLatestStream.combine2(
     widget.player.width,
     widget.player.height,
@@ -87,7 +89,7 @@ class _SourceSizedOverlayState extends State<_SourceSizedOverlay> {
             aspectRatio: ratio,
             ready: ready && state.isActive,
             initialCrop: state.overlayLayout.crop,
-            video: state.isActive ? video : const SizedBox.shrink(),
+            video: state.isActive ? widget.player.getVideoWidget(BoxFit.contain) : const SizedBox.shrink(),
             onCancel: widget.sync.cancelOverlayCrop,
             onConfirm: widget.sync.confirmOverlayCrop,
           );
@@ -136,7 +138,7 @@ class _SourceSizedOverlayState extends State<_SourceSizedOverlay> {
                                     -layout.crop.left * bounds.width / layout.crop.width,
                                     -layout.crop.top * bounds.height / layout.crop.height,
                                   ),
-                                  child: IgnorePointer(child: video),
+                                  child: IgnorePointer(child: widget.player.getVideoWidget(BoxFit.contain)),
                                 ),
                               ),
                             ),
@@ -253,7 +255,7 @@ class _CropEditorState extends State<_CropEditor> {
       padding: const EdgeInsets.all(12),
       child: Column(
         children: [
-          const Text('框选 B 画面中要覆盖的区域（例如主播的脸）', style: TextStyle(color: Colors.white)),
+          const Text('框选 B 画面 → 拖动九个点微调 → 确认后在 A 上拖动摆放', style: TextStyle(color: Colors.white)),
           const SizedBox(height: 8),
           Expanded(
             child: Center(
@@ -279,13 +281,58 @@ class _CropEditorState extends State<_CropEditor> {
                             }
                           }
                         : null,
-                    onPanEnd: (_) => start = null,
-                    onPanCancel: () => start = null,
+                    onPanEnd: (_) => setState(() => start = null),
+                    onPanCancel: () => setState(() => start = null),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
                         IgnorePointer(child: widget.video),
                         IgnorePointer(child: CustomPaint(painter: _CropPainter(crop))),
+                        if (widget.ready && start == null && CommentaryOverlayLayout.validCrop(crop))
+                          for (final handle in CropHandle.values)
+                            Positioned(
+                              left: ((crop.left + crop.width * handle.position.dx) * constraints.maxWidth - 14).clamp(
+                                0.0,
+                                constraints.maxWidth - 28,
+                              ),
+                              top: ((crop.top + crop.height * handle.position.dy) * constraints.maxHeight - 14).clamp(
+                                0.0,
+                                constraints.maxHeight - 28,
+                              ),
+                              child: GestureDetector(
+                                key: ValueKey('commentary-crop-handle-${handle.name}'),
+                                behavior: HitTestBehavior.opaque,
+                                dragStartBehavior: DragStartBehavior.down,
+                                onPanUpdate: (event) => setState(() {
+                                  crop = CommentaryOverlayLayout.adjustCrop(
+                                    crop,
+                                    handle,
+                                    Offset(
+                                      event.delta.dx / constraints.maxWidth,
+                                      event.delta.dy / constraints.maxHeight,
+                                    ),
+                                  );
+                                }),
+                                child: SizedBox(
+                                  width: 28,
+                                  height: 28,
+                                  child: Center(
+                                    child: Container(
+                                      width: handle == CropHandle.center ? 20 : 12,
+                                      height: handle == CropHandle.center ? 20 : 12,
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue,
+                                        border: Border.all(color: Colors.white, width: 2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: handle == CropHandle.center
+                                          ? const Icon(Icons.open_with, size: 14, color: Colors.white)
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                         if (!widget.ready)
                           const Center(
                             child: Text('等待 B 视频尺寸…', style: TextStyle(color: Colors.white)),

@@ -1,11 +1,11 @@
 {
-  "version": "3.0.15",
-  "build_number": 4103,
-  "version_num": 300154103,
+  "version": "3.0.16",
+  "build_number": 4104,
+  "version_num": 300164104,
   "android_abis": [],
-  "version_desc": "version: 3.0.15\n版本更新：\n- 修复旧设置迁移导致的全局静音\n- 完善 Windows 安装包完整性验证\n- 发布 Windows 与 macOS 双流解说版本",
-  "prerelease": false,
-  "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15",
+  "version_desc": "version: 3.0.16 测试版\n- 修复裁剪与覆盖切换时重复订阅导致的灰屏\n- 增加九点选区微调\n- 退出前等待播放器及数据库关闭",
+  "prerelease": true,
+  "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
   "platforms": {
     "android": {
       "version": "3.0.15",
@@ -17,12 +17,12 @@
       "android_abis": []
     },
     "windows": {
-      "version": "3.0.15",
-      "build_number": 4103,
-      "version_num": 300154103,
-      "version_desc": "修复静音配置迁移并完善安装包完整性验证",
-      "prerelease": false,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15",
+      "version": "3.0.16",
+      "build_number": 4104,
+      "version_num": 300164104,
+      "version_desc": "测试版：修复裁剪切换灰屏，增加九点微调与退出清理",
+      "prerelease": true,
+      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
       "windows_msix_available": false
     },
     "linux": {
@@ -34,12 +34,12 @@
       "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
     },
     "macos": {
-      "version": "3.0.15",
-      "build_number": 4103,
-      "version_num": 300154103,
-      "version_desc": "修复静音配置迁移并发布双流解说版本",
-      "prerelease": false,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
+      "version": "3.0.16",
+      "build_number": 4104,
+      "version_num": 300164104,
+      "version_desc": "测试版：修复裁剪切换灰屏，增加九点微调，处理退出时数据库释放崩溃",
+      "prerelease": true,
+      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },
     "ios": {
       "version": "3.0.15",

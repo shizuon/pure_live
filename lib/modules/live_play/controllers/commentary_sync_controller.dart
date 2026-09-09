@@ -54,6 +54,9 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   double _primaryRestoreVolume = 1;
   double _companionRate = 1;
   bool _manualStop = false;
+  bool _disposed = false;
+  Future<void>? _exitFuture;
+  Future<void>? _disposeFuture;
   bool _transportPausedByUser = false;
   bool _stoppingPrimary = false;
   bool _primaryReloading = false;
@@ -759,7 +762,12 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     }
   }
 
-  Future<void> exit({bool restorePrimary = true}) async {
+  Future<void> exit({bool restorePrimary = true}) {
+    if (_disposed) return Future<void>.value();
+    return _exitFuture ??= _exit(restorePrimary: restorePrimary).whenComplete(() => _exitFuture = null);
+  }
+
+  Future<void> _exit({required bool restorePrimary}) async {
     _manualStop = true;
     _generation++;
     _driftTimer?.cancel();
@@ -816,8 +824,11 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     _companionRate = 1;
   }
 
-  Future<void> dispose() async {
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+
+  Future<void> _dispose() async {
     await exit();
+    _disposed = true;
     await _primaryLoadingSubscription.cancel();
     state.close();
   }
