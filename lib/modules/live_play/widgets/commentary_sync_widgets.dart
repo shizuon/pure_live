@@ -149,6 +149,7 @@ class CommentarySyncDialog extends StatelessWidget {
       final commentaryDanmakuSupported = danmaku.supportsRoom(state.audioRoom);
       return AlertDialog(
         title: Text(i18n('commentary_sync_settings')),
+        scrollable: true,
         content: SizedBox(
           width: 430,
           child: Column(
@@ -158,6 +159,20 @@ class CommentarySyncDialog extends StatelessWidget {
               Text('${i18n('commentary_video')}: ${state.videoRoom?.nick ?? '-'}'),
               const SizedBox(height: 4),
               Text('${i18n('commentary_audio')}: ${state.audioRoom?.nick ?? '-'}'),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.crop),
+                label: Text(state.overlayEnabled ? '重新裁剪 B 画面覆盖' : '裁剪 B 画面覆盖到 A'),
+                onPressed: state.isActive
+                    ? () {
+                        sync.beginOverlayCrop();
+                        Navigator.pop(context);
+                      }
+                    : null,
+              ),
+              const Text('框选主播的脸后，可拖动位置、拖右下角缩放。B 画面与声音一起校准；仅本次会话有效。'),
+              if (state.overlayEnabled)
+                TextButton(onPressed: sync.disableOverlay, child: const Text('关闭画面覆盖（保留 B 声音）')),
               const SizedBox(height: 14),
               Text(i18n('commentary_danmaku_source'), style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 8),

@@ -16,6 +16,7 @@ import 'package:pure_live/modules/live_play/service/commentary_platform_support.
 import 'package:pure_live/player/core/portrait_stream_support.dart';
 import 'package:pure_live/modules/live_play/dialogs/play_other.dart';
 import 'package:pure_live/modules/live_play/widgets/commentary_sync_widgets.dart';
+import 'package:pure_live/modules/live_play/widgets/commentary_video_overlay.dart';
 import 'package:pure_live/core/iptv/local/database.dart' as database;
 import 'package:pure_live/modules/live_play/controllers/player_state.dart';
 import 'package:pure_live/modules/live_play/pages/danmaku_settings_page.dart';
@@ -186,11 +187,21 @@ class _VideoControllerPanelState extends State<VideoControllerPanel> {
                   },
                   child: BrightnessVolumnDargArea(controller: controller),
                 ),
-                LockButton(controller: controller),
-                if (CommentaryPlatformSupport.isSupported) CommentaryCalibrationPreview(controller: controller),
-                if (CommentaryPlatformSupport.isSupported) CommentarySyncBadge(controller: controller),
-                TopActionBar(controller: controller, barHeight: barHeight),
-                BottomActionBar(controller: controller, barHeight: barHeight),
+                if (CommentaryPlatformSupport.isSupported)
+                  CommentaryVideoOverlay(
+                    sync: GlobalPlayerService.instance.commentarySyncController,
+                    controlsVisible: controller.showController.value || controller.isMenuOpen.value,
+                    controlsLocked: controller.showLocked.value,
+                    onInteraction: controller.enableController,
+                  ),
+                if (!GlobalPlayerService.instance.commentarySyncController.state.value.overlayEditing) ...[
+                  // Playback/unlock controls remain reachable above the crop.
+                  LockButton(controller: controller),
+                  if (CommentaryPlatformSupport.isSupported) CommentaryCalibrationPreview(controller: controller),
+                  if (CommentaryPlatformSupport.isSupported) CommentarySyncBadge(controller: controller),
+                  TopActionBar(controller: controller, barHeight: barHeight),
+                  BottomActionBar(controller: controller, barHeight: barHeight),
+                ],
               ],
             ),
           );

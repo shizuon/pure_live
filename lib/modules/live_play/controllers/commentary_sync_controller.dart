@@ -5,6 +5,7 @@ import 'package:pure_live/modules/live_play/service/stream_source_resolver.dart'
 import 'package:pure_live/modules/live_play/service/commentary_sync_math.dart';
 import 'package:pure_live/modules/live_play/service/commentary_platform_support.dart';
 import 'package:pure_live/modules/live_play/states/commentary_sync_state.dart';
+import 'package:pure_live/modules/live_play/states/commentary_overlay_layout.dart';
 import 'package:pure_live/player/core/live_audio_control_delegate.dart';
 import 'package:pure_live/player/core/player_manager.dart';
 import 'package:pure_live/player/core/player_pool.dart';
@@ -61,6 +62,8 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   bool _handlingCompanionFailure = false;
   bool _commentaryAudioSelected = false;
   bool _previewTrackChanging = false;
+  bool _previewBeforeCrop = false;
+  Future<void> _videoTransitionTail = Future<void>.value();
   int _audioTransitionEpoch = 0;
   Timer? _driftTimer;
   Timer? _bufferReconnectTimer;
@@ -343,28 +346,69 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
 
   Future<void> showCalibrationPreview() async {
     if (!isEngaged) return;
-    state.value = state.value.copyWith(previewVisible: true, message: '请对照 A、B 画面中的时间戳进行校准');
+    state.value = state.value.copyWith(previewVisible: true, overlayEditing: false, message: '请对照 A、B 画面中的时间戳进行校准');
     await _setCompanionVideoEnabled(true);
   }
 
   Future<void> finishCalibrationPreview() async {
     if (!isEngaged) return;
     state.value = state.value.copyWith(previewVisible: false, message: '校准画面已隐藏，可随时再次校准');
-    await _setCompanionVideoEnabled(false);
+    await _setCompanionVideoEnabled(state.value.needsCompanionVideo);
   }
 
-  Future<void> _setCompanionVideoEnabled(bool enabled) async {
+  Future<void> beginOverlayCrop() async {
+    if (!isActive) return;
+    _previewBeforeCrop = state.value.previewVisible;
+    state.value = state.value.copyWith(previewVisible: false, overlayEditing: true);
+    await _setCompanionVideoEnabled(true);
+  }
+
+  Future<void> cancelOverlayCrop() async {
+    if (!isEngaged || !state.value.overlayEditing) return;
+    state.value = state.value.copyWith(overlayEditing: false, previewVisible: _previewBeforeCrop);
+    await _setCompanionVideoEnabled(state.value.needsCompanionVideo);
+  }
+
+  Future<void> confirmOverlayCrop(Rect crop) async {
+    if (!isActive || !state.value.overlayEditing || !CommentaryOverlayLayout.validCrop(crop)) return;
+    state.value = state.value.copyWith(
+      overlayEnabled: true,
+      overlayEditing: false,
+      previewVisible: false,
+      overlayLayout: state.value.overlayLayout.copyWith(crop: crop),
+    );
+    await _setCompanionVideoEnabled(true);
+  }
+
+  Future<void> disableOverlay() async {
+    if (!isEngaged) return;
+    state.value = state.value.copyWith(overlayEnabled: false, overlayEditing: false);
+    await _setCompanionVideoEnabled(state.value.needsCompanionVideo);
+  }
+
+  void updateOverlayLayout(CommentaryOverlayLayout layout) {
+    if (!state.value.overlayEnabled || !CommentaryOverlayLayout.validCrop(layout.crop)) return;
+    state.value = state.value.copyWith(overlayLayout: layout);
+  }
+
+  Future<void> _setCompanionVideoEnabled(bool enabled) {
     final companion = _companion;
-    if (companion == null || _previewTrackChanging) return;
-    _previewTrackChanging = true;
-    try {
-      await companion.setAudioOnly(!enabled).timeout(const Duration(seconds: 5));
-    } catch (_) {
-      // B audio remains authoritative after calibration. A failed optional
-      // video-track toggle must not interrupt it or trigger source failover.
-    } finally {
-      _previewTrackChanging = false;
-    }
+    final generation = _generation;
+    // Serialize rapid preview/overlay toggles; never drop the last requested mode.
+    _videoTransitionTail = _videoTransitionTail.then((_) async {
+      if (companion == null || companion != _companion || generation != _generation) return;
+      _previewTrackChanging = true;
+      try {
+        await companion.setAudioOnly(!enabled).timeout(const Duration(seconds: 5));
+      } catch (_) {
+        if (generation == _generation) {
+          state.value = state.value.copyWith(message: 'B 画面切换失败，可重试或更换解说源；声音保持不变');
+        }
+      } finally {
+        _previewTrackChanging = false;
+      }
+    });
+    return _videoTransitionTail;
   }
 
   Future<void> resync({Future<void> Function()? reopenPrimary}) async {
@@ -375,7 +419,12 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     _driftTimer?.cancel();
     _cancelBufferRecovery();
     _cancelOffsetDelay();
-    state.value = state.value.copyWith(status: CommentarySyncStatus.loading, previewVisible: true, message: '正在重新同步');
+    state.value = state.value.copyWith(
+      status: CommentarySyncStatus.loading,
+      previewVisible: true,
+      overlayEditing: false,
+      message: '正在重新同步',
+    );
     await _restorePrimaryAudio();
     await _disposeCompanion();
 
@@ -575,7 +624,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
           await _openAvailableCandidate(generation: generation);
           await _finishAvailableCandidate(generation: generation, targetOffsetMs: _requestedOffsetMs);
           if (generation != _generation || _manualStop) return;
-          if (!state.value.previewVisible) {
+          if (!state.value.needsCompanionVideo) {
             await _setCompanionVideoEnabled(false);
           }
           state.value = state.value.copyWith(message: '解说源已恢复，请确认同步');
@@ -717,6 +766,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     _driftTimer = null;
     _cancelBufferRecovery();
     _cancelOffsetDelay();
+    state.value = state.value.copyWith(overlayEnabled: false, overlayEditing: false, previewVisible: false);
     if (restorePrimary && state.value.isEngaged) await _restorePrimaryAudio();
     await _disposeCompanion();
     _source = null;
@@ -751,6 +801,8 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
 
   Future<void> _disposeCompanion() async {
     _cancelBufferRecovery();
+    // Finish an in-flight native video-track switch before releasing its player.
+    await _videoTransitionTail;
     for (final subscription in _companionSubscriptions) {
       await subscription.cancel();
     }

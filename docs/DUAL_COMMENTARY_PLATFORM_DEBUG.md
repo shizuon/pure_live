@@ -1,5 +1,7 @@
 # 双流解说模式：平台调试与移植说明
 
+新增功能说明：[B 画面裁剪覆盖](COMMENTARY_VIDEO_OVERLAY.md)。下面的构建基线及验证记录属于历史批次，不代表新增覆盖功能已完成实机验收。
+
 ## 当前实现基线
 
 - 上游基线：`liuchuancong/pure_live` `master`，提交 `fac506c76085a547af06ba8541473a836e108c16`。
