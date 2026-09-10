@@ -22,6 +22,106 @@ import 'package:pure_live/player/models/player_state.dart';
 import 'package:rxdart/rxdart.dart' show BehaviorSubject;
 
 void main() {
+  test('playback exhausts low-quality lines before resolving another tier and refreshes URLs on resync', () async {
+    final events = <String>[];
+    var resolveCount = 0;
+    final primary = _SyncPlayer(position: const Duration(seconds: 30));
+    final pool = PlayerPool(
+      factory: (_) async => _SyncPlayer(
+        position: const Duration(seconds: 27),
+        onOpen: (url) {
+          events.add('open:$url');
+          if (url.contains('low')) throw StateError('failed CDN');
+        },
+      ),
+    );
+    final controller = CommentarySyncController(
+      primaryManager: _PlayerManager(primary: primary, pool: pool),
+      playerPool: pool,
+      platformSupportProbe: () => true,
+      resolver: _SourceResolver((room) async {
+        final attempt = ++resolveCount;
+        return ResolvedCommentarySource(
+          room: room,
+          candidates: StreamSourceResolver.buildCandidates(
+            room: room,
+            headers: const {},
+            qualities: ['unused', 'high', 'low'].map((q) => LivePlayQuality(quality: q)).toList(),
+            getPlayUrls: (quality) async {
+              events.add('resolve:${quality.quality}');
+              if (quality.quality == 'unused') throw StateError('must not prefetch');
+              return quality.quality == 'low' ? ['low-1', 'low-2'] : ['high-$attempt'];
+            },
+          ),
+        );
+      }),
+    );
+    addTearDown(controller.dispose);
+    await controller.activate(
+      videoRoom: LiveRoom(roomId: 'a', platform: 'test'),
+      audioRoom: LiveRoom(roomId: 'b', platform: 'test'),
+      primaryVolume: .6,
+    );
+    expect(controller.isActive, isTrue);
+    expect(events, ['resolve:low', 'open:low-1', 'open:low-2', 'resolve:high', 'open:high-1']);
+    events.clear();
+    await controller.resync(reopenPrimary: primary.play);
+    expect(controller.isActive, isTrue);
+    expect(events, ['resolve:low', 'open:low-1', 'open:low-2', 'resolve:high', 'open:high-2']);
+  });
+
+  test('replacing B during URL lookup cannot start the cancelled player or overwrite the new source', () async {
+    final entered = Completer<void>();
+    final pending = Completer<List<String>>();
+    final opened = <String>[];
+    final primary = _SyncPlayer(position: const Duration(seconds: 30));
+    final pool = PlayerPool(
+      factory: (_) async => _SyncPlayer(position: const Duration(seconds: 27), onOpen: opened.add),
+    );
+    final controller = CommentarySyncController(
+      primaryManager: _PlayerManager(primary: primary, pool: pool),
+      playerPool: pool,
+      platformSupportProbe: () => true,
+      resolver: _SourceResolver(
+        (room) async => ResolvedCommentarySource(
+          room: room,
+          candidates: StreamSourceResolver.buildCandidates(
+            room: room,
+            headers: const {},
+            qualities: [LivePlayQuality(quality: 'low')],
+            getPlayUrls: (_) {
+              if (room.roomId == 'old') {
+                entered.complete();
+                return pending.future;
+              }
+              return Future.value(['new-url']);
+            },
+          ),
+        ),
+      ),
+    );
+    addTearDown(controller.dispose);
+    final videoRoom = LiveRoom(roomId: 'a', platform: 'test');
+    final oldActivation = controller.activate(
+      videoRoom: videoRoom,
+      audioRoom: LiveRoom(roomId: 'old', platform: 'test'),
+      primaryVolume: .6,
+    );
+    await entered.future;
+    expect(opened, isEmpty);
+    expect(primary.lastVolume, 1, reason: 'keep A volume unchanged while resolving');
+    await controller.activate(
+      videoRoom: videoRoom,
+      audioRoom: LiveRoom(roomId: 'new', platform: 'test'),
+      primaryVolume: .6,
+    );
+    pending.complete(['old-url']);
+    await oldActivation;
+    expect(controller.isActive, isTrue);
+    expect(controller.state.value.audioRoom?.roomId, 'new');
+    expect(opened, ['new-url']);
+  });
+
   test('calibration pauses the correct stream and restores primary volume', () async {
     final primary = _SyncPlayer(position: const Duration(seconds: 30));
     final companion = _SyncPlayer(position: const Duration(seconds: 27));
@@ -324,7 +424,7 @@ class _Resolver extends StreamSourceResolver {
     return Future.value(
       ResolvedCommentarySource(
         room: selectedRoom,
-        candidates: [
+        candidates: CommentaryCandidates.fromList([
           ResolvedStreamCandidate(
             room: selectedRoom,
             quality: quality,
@@ -332,10 +432,17 @@ class _Resolver extends StreamSourceResolver {
             playUrls: const ['https://example.invalid/live.flv'],
             headers: const {},
           ),
-        ],
+        ]),
       ),
     );
   }
+}
+
+class _SourceResolver extends StreamSourceResolver {
+  _SourceResolver(this.resolve);
+  final Future<ResolvedCommentarySource> Function(LiveRoom) resolve;
+  @override
+  Future<ResolvedCommentarySource> resolveCommentary(LiveRoom room) => resolve(room);
 }
 
 class _PlayerManager extends PlayerManager {
@@ -386,7 +493,9 @@ class _PlayerManager extends PlayerManager {
 }
 
 class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer {
-  _SyncPlayer({required Duration position}) : _currentPosition = position;
+  _SyncPlayer({required Duration position, this.onOpen}) : _currentPosition = position;
+
+  final void Function(String)? onOpen;
 
   final Duration _currentPosition;
   final BehaviorSubject<bool> _playing = BehaviorSubject.seeded(true);
@@ -413,6 +522,7 @@ class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer {
     bool startMuted = false,
     bool force = false,
   }) async {
+    onOpen?.call(url);
     sourceAudioOnly = audioOnly;
     _loading.add(false);
     _playing.add(true);

@@ -40,7 +40,7 @@ void main() {
 
   test('a failed low quality still falls back to higher qualities', () async {
     final room = LiveRoom(roomId: 'b', platform: 'test');
-    final candidates = await StreamSourceResolver.buildCandidates(
+    final candidates = StreamSourceResolver.buildCandidates(
       room: room,
       qualities: [
         LivePlayQuality(quality: '原画'),
@@ -52,7 +52,9 @@ void main() {
         return ['high-a', 'high-b'];
       },
     );
-    expect(candidates.map((candidate) => candidate.url), ['high-a', 'high-b']);
+    expect((await candidates.next())?.url, 'high-a');
+    expect((await candidates.next())?.url, 'high-b');
+    expect(await candidates.next(), isNull);
   });
 
   test('error state stays engaged until the user exits dual stream', () {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/model/live_play_quality.dart';
 import 'package:pure_live/player/core/playback_header_resolver.dart';
@@ -22,7 +24,59 @@ class ResolvedCommentarySource {
   const ResolvedCommentarySource({required this.room, required this.candidates});
 
   final LiveRoom room;
-  final List<ResolvedStreamCandidate> candidates;
+  final CommentaryCandidates candidates;
+}
+
+/// A demand-driven cursor: requesting a line never prefetches another quality.
+/// Cancellation cannot abort a platform HTTP request already in flight, but
+/// drops its result and prevents both further requests and player creation.
+class CommentaryCandidates {
+  CommentaryCandidates.fromList(List<ResolvedStreamCandidate> candidates)
+    : _ready = List.of(candidates),
+      _qualities = const [],
+      _loadQuality = null;
+
+  CommentaryCandidates._(this._qualities, this._loadQuality);
+
+  List<ResolvedStreamCandidate> _ready = [];
+  final List<LivePlayQuality> _qualities;
+  final Future<List<ResolvedStreamCandidate>> Function(LivePlayQuality)? _loadQuality;
+  final Set<String> _seenUrls = {};
+  int _qualityIndex = 0;
+  int _lineIndex = 0;
+  bool _cancelled = false;
+  Future<ResolvedStreamCandidate?>? _inFlight;
+
+  Future<ResolvedStreamCandidate?> next() {
+    if (_cancelled) return Future.value();
+    return _inFlight ??= _next().whenComplete(() => _inFlight = null);
+  }
+
+  Future<ResolvedStreamCandidate?> _next() async {
+    while (!_cancelled) {
+      while (_lineIndex < _ready.length) {
+        final candidate = _ready[_lineIndex++];
+        if (_seenUrls.add(candidate.url)) return candidate;
+      }
+      if (_qualityIndex >= _qualities.length) return null;
+      final quality = _qualities[_qualityIndex++];
+      try {
+        final candidates = await _loadQuality!(quality);
+        if (_cancelled) return null;
+        _ready = candidates;
+        _lineIndex = 0;
+      } catch (_) {
+        // A failed or expired quality does not block the remaining qualities.
+      }
+    }
+    return null;
+  }
+
+  void cancel() {
+    _cancelled = true;
+    _ready = [];
+    _seenUrls.clear();
+  }
 }
 
 class StreamSourceResolver {
@@ -45,7 +99,7 @@ class StreamSourceResolver {
       final quality = LivePlayQuality(quality: '原画');
       return ResolvedCommentarySource(
         room: detail,
-        candidates: [
+        candidates: CommentaryCandidates.fromList([
           ResolvedStreamCandidate(
             room: detail,
             quality: quality,
@@ -53,55 +107,34 @@ class StreamSourceResolver {
             playUrls: [detail.link!],
             headers: headers,
           ),
-        ],
+        ]),
       );
     }
 
     final qualities = await site.liveSite.getPlayQualites(detail: detail);
-    final candidates = await buildCandidates(
+    final candidates = buildCandidates(
       room: detail,
       qualities: qualities,
       headers: headers,
       getPlayUrls: (quality) => site.liveSite.getPlayUrls(detail: detail, quality: quality),
     );
 
-    if (candidates.isEmpty) throw StateError('No commentary stream available');
     return ResolvedCommentarySource(room: detail, candidates: candidates);
   }
 
-  static Future<List<ResolvedStreamCandidate>> buildCandidates({
+  static CommentaryCandidates buildCandidates({
     required LiveRoom room,
     required List<LivePlayQuality> qualities,
     required Map<String, String> headers,
     required Future<List<String>> Function(LivePlayQuality quality) getPlayUrls,
-  }) async {
-    final candidates = <ResolvedStreamCandidate>[];
-    final seenUrls = <String>{};
-    for (final quality in lowestQualityFirst(qualities)) {
-      List<String> urls;
-      try {
-        urls = await getPlayUrls(quality);
-      } catch (_) {
-        // A single failed quality must not prevent the resolver from trying
-        // the remaining qualities and their CDN lines.
-        continue;
-      }
-      final validUrls = urls.where((url) => url.isNotEmpty).toSet().toList(growable: false);
-      for (final url in validUrls) {
-        if (!seenUrls.add(url)) continue;
-        candidates.add(
-          ResolvedStreamCandidate(
-            room: room,
-            quality: quality,
-            url: url,
-            playUrls: List.unmodifiable(validUrls),
-            headers: headers,
-          ),
-        );
-      }
-    }
-    return candidates;
-  }
+  }) => CommentaryCandidates._(lowestQualityFirst(qualities), (quality) async {
+    final urls = await getPlayUrls(quality);
+    final validUrls = List<String>.unmodifiable(urls.where((url) => url.isNotEmpty).toSet());
+    return [
+      for (final url in validUrls)
+        ResolvedStreamCandidate(room: room, quality: quality, url: url, playUrls: validUrls, headers: headers),
+    ];
+  });
 
   static List<LivePlayQuality> lowestQualityFirst(List<LivePlayQuality> qualities) {
     return qualities.reversed.toList(growable: false);

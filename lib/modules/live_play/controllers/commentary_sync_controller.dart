@@ -45,7 +45,6 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   SyncCapablePlayer? _companionSync;
   SyncCapablePlayer? _primarySync;
   ResolvedCommentarySource? _source;
-  int _candidateIndex = 0;
   int _generation = 0;
   int _consecutiveDriftSamples = 0;
   int _appliedOffsetMs = 0;
@@ -96,6 +95,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
 
     await exit();
     final generation = ++_generation;
+    _source?.candidates.cancel();
     _manualStop = false;
     final volume = (primaryVolume ?? videoRoom.getSavedVolume()).clamp(0.0, 1.0).toDouble();
     _primaryRestoreVolume = volume;
@@ -111,10 +111,8 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     );
 
     try {
-      _source = await resolver.resolveCommentary(audioRoom);
-      if (generation != _generation) return;
+      if (!await _resolveSource(audioRoom, generation)) return;
       state.value = state.value.copyWith(audioRoom: _source!.room);
-      _candidateIndex = 0;
       await _openAvailableCandidate(generation: generation);
       if (generation != _generation) return;
       await _finishAvailableCandidate(generation: generation, targetOffsetMs: 0);
@@ -125,13 +123,26 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     }
   }
 
+  Future<bool> _resolveSource(LiveRoom room, int generation) async {
+    final source = await resolver.resolveCommentary(room);
+    if (generation != _generation || _manualStop) {
+      source.candidates.cancel();
+      return false;
+    }
+    _source?.candidates.cancel();
+    _source = source;
+    return true;
+  }
+
   Future<void> _openAvailableCandidate({required int generation}) async {
-    final candidates = _source?.candidates ?? const <ResolvedStreamCandidate>[];
+    final candidates = _source?.candidates;
     Object? lastError;
-    while (_candidateIndex < candidates.length && generation == _generation) {
+    while (generation == _generation && !_manualStop) {
+      final candidate = await candidates?.next();
+      if (generation != _generation || _manualStop) return;
+      if (candidate == null) break;
       try {
         await _createCompanion();
-        final candidate = candidates[_candidateIndex];
         await _companion!.setVolume(0);
         await _companion!.setDataSource(
           candidate.url,
@@ -147,8 +158,8 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
         }
         return;
       } catch (error) {
+        if (generation != _generation || _manualStop) return;
         lastError = error;
-        _candidateIndex++;
         await _disposeCompanion();
       }
     }
@@ -234,7 +245,6 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
       } catch (error) {
         lastError = error;
         await _restorePrimaryAudio();
-        _candidateIndex++;
         await _disposeCompanion();
         await _openAvailableCandidate(generation: generation);
       }
@@ -418,6 +428,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     final audioRoom = state.value.audioRoom;
     if (!isEngaged || audioRoom == null) return;
     final generation = ++_generation;
+    _source?.candidates.cancel();
     final targetOffset = _requestedOffsetMs;
     _driftTimer?.cancel();
     _cancelBufferRecovery();
@@ -433,11 +444,8 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
 
     try {
       final primaryFuture = reopenPrimary?.call() ?? primaryManager.replay(startMuted: false);
-      final sourceFuture = resolver.resolveCommentary(audioRoom);
-      _source = await sourceFuture;
-      if (generation != _generation) return;
+      if (!await _resolveSource(audioRoom, generation)) return;
       state.value = state.value.copyWith(audioRoom: _source!.room);
-      _candidateIndex = 0;
       await Future.wait([primaryFuture, _openAvailableCandidate(generation: generation)]);
       await primaryManager.onPlaying.where((playing) => playing).first.timeout(_playingTimeout);
       await _finishAvailableCandidate(generation: generation, targetOffsetMs: targetOffset);
@@ -605,6 +613,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     _handlingCompanionFailure = true;
     try {
       final generation = ++_generation;
+      _source?.candidates.cancel();
       _driftTimer?.cancel();
       _cancelBufferRecovery();
       _cancelOffsetDelay();
@@ -620,10 +629,8 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
           if (audioRoom == null) break;
           // Always obtain fresh signed URLs. Reusing the failed candidate list
           // makes recovery impossible when a CDN URL has expired.
-          _source = await resolver.resolveCommentary(audioRoom);
-          if (generation != _generation) return;
+          if (!await _resolveSource(audioRoom, generation)) return;
           state.value = state.value.copyWith(audioRoom: _source!.room);
-          _candidateIndex = 0;
           await _openAvailableCandidate(generation: generation);
           await _finishAvailableCandidate(generation: generation, targetOffsetMs: _requestedOffsetMs);
           if (generation != _generation || _manualStop) return;
@@ -770,6 +777,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   Future<void> _exit({required bool restorePrimary}) async {
     _manualStop = true;
     _generation++;
+    _source?.candidates.cancel();
     _driftTimer?.cancel();
     _driftTimer = null;
     _cancelBufferRecovery();
@@ -779,7 +787,6 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     await _disposeCompanion();
     _source = null;
     _primarySync = null;
-    _candidateIndex = 0;
     _appliedOffsetMs = 0;
     _requestedOffsetMs = 0;
     _baselineGapMs = 0;
