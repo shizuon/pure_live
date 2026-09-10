@@ -1,9 +1,9 @@
 {
-  "version": "3.0.18",
-  "build_number": 4106,
-  "version_num": 300184106,
+  "version": "3.0.19",
+  "build_number": 4107,
+  "version_num": 300194107,
   "android_abis": [],
-  "version_desc": "3.0.18 测试版：修复 Windows GPU 延迟时视频帧交付停滞，减少 macOS 小窗口的软件输出开销；保留斗鱼弹幕重连、双流和裁剪覆盖修复。",
+  "version_desc": "3.0.19 测试版：清理重复设置调度，录制按需启动，B 从最低画质按需解析；保留桌面卡顿、斗鱼弹幕重连和裁剪覆盖修复。",
   "prerelease": true,
   "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
   "platforms": {
@@ -17,10 +17,10 @@
       "android_abis": []
     },
     "windows": {
-      "version": "3.0.18",
-      "build_number": 4106,
-      "version_num": 300184106,
-      "version_desc": "3.0.18 测试版：修复 Windows GPU 延迟时视频帧交付停滞，减少 macOS 小窗口的软件输出开销；保留斗鱼弹幕重连、双流和裁剪覆盖修复。",
+      "version": "3.0.19",
+      "build_number": 4107,
+      "version_num": 300194107,
+      "version_desc": "3.0.19 测试版：清理重复设置调度，录制按需启动，B 从最低画质按需解析；保留桌面卡顿、斗鱼弹幕重连和裁剪覆盖修复。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
       "windows_msix_available": false
@@ -34,10 +34,10 @@
       "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
     },
     "macos": {
-      "version": "3.0.18",
-      "build_number": 4106,
-      "version_num": 300184106,
-      "version_desc": "3.0.18 测试版：修复 Windows GPU 延迟时视频帧交付停滞，减少 macOS 小窗口的软件输出开销；保留斗鱼弹幕重连、双流和裁剪覆盖修复。",
+      "version": "3.0.19",
+      "build_number": 4107,
+      "version_num": 300194107,
+      "version_desc": "3.0.19 测试版：清理重复设置调度，录制按需启动，B 从最低画质按需解析；保留桌面卡顿、斗鱼弹幕重连和裁剪覆盖修复。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },

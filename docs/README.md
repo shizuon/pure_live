@@ -18,6 +18,7 @@
 - [平台接口与兼容性](PLATFORM_COMPATIBILITY.md)：各平台分区、搜索、弹幕和人数指标的当前能力。
 - [Android/Windows 性能验证](PERFORMANCE.md)：120 Hz 请求、渲染/滑动优化和实机采样方法。
 - [全功能保留的清理与性能消融计划](CLEANUP_ABLATION_PLAN.md)：启动、录制、B 源解析、闲置资源与依赖清理的证据、实验顺序和回归要求。
+- [第一批清理实验](CLEANUP_ABLATION_RESULTS.md)：E1—E4 的实际改动、调用次数变化、录制恢复与 B 解析回退验证。
 - [桌面播放卡顿排查](DESKTOP_PLAYBACK_STUTTER.md)：Windows 帧交付时序、macOS 软件输出采样、候选修复与尚待验证的偶发卡顿。
 - [关注页刷新与状态一致性](FAVORITE_REFRESH_DESIGN.md)：下拉手势、启动核验、并发事务和失败语义。
 - [上游问题审计（2026-08-24）](ISSUE_AUDIT_2026_08_24.md)：#778、#779、#780、#782、#783、#784, #785 的根因、代码落点和验证状态。
