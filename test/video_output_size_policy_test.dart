@@ -44,4 +44,25 @@ void main() {
     );
     expect(calculateVideoOutputSize(logicalViewport: Size.zero, devicePixelRatio: 1), Size.zero);
   });
+
+  test('Retina window output follows physical pixels and restores full source in fullscreen', () {
+    expect(
+      calculateVideoOutputSize(
+        logicalViewport: const Size(800, 450),
+        devicePixelRatio: 2,
+        sourceWidth: 3840,
+        sourceHeight: 2160,
+      ),
+      const Size(1600, 900),
+    );
+    expect(
+      calculateVideoOutputSize(
+        logicalViewport: const Size(1920, 1080),
+        devicePixelRatio: 2,
+        sourceWidth: 3840,
+        sourceHeight: 2160,
+      ),
+      const Size(3840, 2160),
+    );
+  });
 }

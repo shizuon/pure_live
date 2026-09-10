@@ -18,25 +18,11 @@
 #include <atomic>
 #include <cstdint>
 
-// Minimal IDXGISwapChain facade backed by a lock-free 4-slot mailbox with
-// a last-completed-frame cache.
-//
-// Four BGRA8 textures are kept, each with a DXGI shared HANDLE.
-// mailbox_state_ is a single atomic<uint32_t>:
-//   bits [1:0] = free_slot         (0-3): producer takes this for the next frame
-//   bits [3:2] = completed_slot    (0-3): most recent fence-confirmed frame;
-//                                          safe Consumer fallback at any time
-//   bits [5:4] = pending_or_extra  (0-3): has_pending=1 → latest submitted frame
-//                                          (fence may still be in-flight);
-//                                          has_pending=0 → second free slot
-//   bit  [6]   = has_pending            : 1 = a new frame is waiting to be consumed
-//
-// 4-slot invariant (all roles are always distinct):
-//   has_pending=1: write_slot_(private) | free | pending | completed  = 4 slots
-//   has_pending=0: write_slot_(private) | free | extra_free | completed = 4 slots
-//
-// Initial value 57u = 0b0_11_10_01:
-//   has_pending=0, extra_free=3, completed=2, free=1, write_slot_=0 (private)
+#include "mailbox_frame_state.h"
+
+// Minimal IDXGISwapChain facade backed by four shared BGRA8 textures.
+// The producer retains an incomplete pending frame until its fence signals;
+// the consumer only reads the most recent GPU-confirmed frame.
 class MailboxSwapChain final : public IDXGISwapChain {
  public:
   // Returns an AddRef'd pointer (ref count = 1). device must outlive this.
@@ -105,28 +91,24 @@ class MailboxSwapChain final : public IDXGISwapChain {
     return E_NOTIMPL;
   }
 
-  // Called from the producer thread after mpv_render_context_render returns.
-  // In addition to publishing write_slot_ as the new pending frame, it
-  // non-blockingly polls the *previous* pending frame's fence and, if the GPU
-  // has already completed it, promotes it to completed and updates
-  // latest_completed_slot_ (release store).  This is the sole site that
-  // advances latest_completed_slot_; ConsumerAcquire never touches the fence.
+  // Non-blocking: retain an incomplete pending frame, otherwise promote it
+  // and submit the freshly rendered write slot. Flutter never waits on a fence.
   void ProducerCommit();
 
   // Called from the consumer thread (Flutter GpuSurfaceTexture callback).
   // Returns the DXGI shared HANDLE of the most recent fence-confirmed frame.
-  // Implementation is a single acquire load of latest_completed_slot_ —
+  // Implementation is a single acquire load of the completed slot —
   // no CAS, no fence poll, no flush, no stall, no KeyedMutex.
   HANDLE ConsumerAcquire();
 
-  // Recreates all three texture slots at the new dimensions.
+  // Recreates all four texture slots at the new dimensions.
   // Must only be called from the producer thread with no active consumer.
   HRESULT Resize(int32_t width, int32_t height);
 
   // Returns the latest GPU-confirmed HANDLE without advancing mailbox state.
   // Safe to call before the consumer thread starts.
   HANDLE ReadHandleSnapshot() const {
-    return slots_[latest_completed_slot_.load(std::memory_order_acquire)]
+    return slots_[frame_state_.completed_slot()]
         .shared_handle;
   }
 
@@ -158,18 +140,7 @@ class MailboxSwapChain final : public IDXGISwapChain {
 
   TextureSlot slots_[4];
 
-  // Lock-free mailbox state — see bit-field comment at top of class.
-  // Initial value 57u = 0b0_11_10_01.
-  std::atomic<uint32_t> mailbox_state_{57u};
-
-  // Cache of the most recently fence-confirmed completed slot.
-  // ConsumerAcquire reads this directly (one atomic load, no CAS, no fence
-  // poll).  Updated by ProducerCommit after a successful non-blocking
-  // pending→completed promotion.  Initialised to 2, which matches the
-  // 'completed' field in mailbox_state_'s initial value 57u.
-  std::atomic<int> latest_completed_slot_{2};
-
-  int write_slot_ = 0;  // producer-private
+  MailboxFrameState frame_state_;
 
   std::atomic<ULONG> ref_count_{1u};
 };

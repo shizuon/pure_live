@@ -155,10 +155,15 @@ class _VideoControllerPanelState extends State<VideoControllerPanel> {
                   final hideForPortrait =
                       manager.isVerticalVideo.value &&
                       SettingsService.to.player.portraitDanmakuMode == PortraitDanmakuMode.hidden;
-                  return Offstage(
-                    offstage: controller.hideDanmaku.value || hideForPortrait,
-                    child: DanmakuViewer(key: controller.danmuKey, controller: controller),
-                  );
+                  // Offstage hides pixels but leaves the barrage's own Ticker
+                  // running. Detach the renderer as the compact overlay does;
+                  // the room's connection and history list remain independent.
+                  if (controller.hideDanmaku.value ||
+                      hideForPortrait ||
+                      !SettingsService.to.danmaku.enableDanmakuDisplay.v) {
+                    return const SizedBox.shrink();
+                  }
+                  return DanmakuViewer(key: controller.danmuKey, controller: controller);
                 }),
                 GestureDetector(
                   onTapDown: (details) => _lastTapPosition = details.globalPosition,

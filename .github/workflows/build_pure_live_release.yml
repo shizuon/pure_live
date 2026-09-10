@@ -93,6 +93,14 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Test
         run: flutter test --concurrency=12
+
+      - name: Test native mailbox frame delivery
+        shell: bash
+        run: |
+          c++ -std=c++17 -Wall -Wextra -pedantic \
+            test/native/mailbox_frame_state_test.cpp \
+            -o "$RUNNER_TEMP/mailbox-frame-state-test"
+          "$RUNNER_TEMP/mailbox-frame-state-test"
       - name: Probe public interfaces
         run: python tool/interface_probe.py
   android:

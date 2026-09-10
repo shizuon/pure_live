@@ -49,7 +49,7 @@ on:
         description: Release tag (e.g. v1.0.0) – required if create_release is true
         required: true
         type: string
-        default: 'v3.0.17'
+        default: 'v3.0.18'
 
   push:
     tags:
@@ -134,6 +134,14 @@ jobs:
 
       - name: Test
         run: flutter test --concurrency=12
+
+      - name: Test native mailbox frame delivery
+        shell: bash
+        run: |
+          c++ -std=c++17 -Wall -Wextra -pedantic \
+            test/native/mailbox_frame_state_test.cpp \
+            -o "$RUNNER_TEMP/mailbox-frame-state-test"
+          "$RUNNER_TEMP/mailbox-frame-state-test"
 
       - name: Probe public interfaces
         continue-on-error: true

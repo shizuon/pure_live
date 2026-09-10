@@ -22,18 +22,18 @@
 #include "utils.h"
 
 // D3D11Renderer creates a D3D11 device and owns a MailboxSwapChain that
-// implements the lock-free triple-buffer mailbox between the libmpv rendering
+// implements the non-blocking four-slot mailbox between the libmpv rendering
 // thread (producer) and Flutter's render thread (consumer).
 //
 // The MailboxSwapChain is passed directly to mpv as the IDXGISwapChain* in
 // mpv_dxgi_init_params.  mpv calls GetBuffer(0, ...) to obtain a render
 // target and submits GPU work into it.  The plugin then calls
 // ProducerCommit(), which (a) signals a fence on the submitted work,
-// (b) non-blockingly checks the *previous* frame's fence and, if already
-// GPU-complete, promotes it to latest_completed_slot_, and (c) atomically
-// publishes write_slot_ as the new pending frame.  Flutter's
+// (b) non-blockingly checks the retained pending frame's fence and, only if
+// GPU-complete, promotes it and submits the write slot as the next pending
+// frame. An incomplete pending frame stays protected. Flutter's
 // GpuSurfaceTexture callback calls ConsumerAcquire() — a single acquire
-// load of latest_completed_slot_ — to receive the DXGI shared HANDLE of
+// load of the completed slot — to receive the DXGI shared HANDLE of
 // the newest confirmed frame, with no copy, no flush, and no OS lock.
 class D3D11Renderer {
  public:
@@ -56,14 +56,14 @@ class D3D11Renderer {
                          IDXGIAdapter* flutter_adapter = nullptr);
   ~D3D11Renderer();
 
-  // Recreates the three mailbox slots at the new dimensions.
+  // Recreates the four mailbox slots at the new dimensions.
   // Must be called from the producer thread only.
   void SetSize(int32_t width, int32_t height);
 
   // Called from the producer thread (mpv thread pool) after
   // mpv_render_context_render returns.  Signals the frame fence, then
-  // non-blockingly attempts to promote the previous pending frame to
-  // latest_completed_slot_, and finally publishes the new pending frame.
+  // non-blockingly promotes a completed pending frame before submitting the
+  // new one, or retains the pending frame until its fence completes.
   void ProducerCommit();
 
   // Called from the consumer thread (Flutter GpuSurfaceTexture callback).

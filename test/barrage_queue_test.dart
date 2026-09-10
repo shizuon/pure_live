@@ -70,6 +70,49 @@ void main() {
     expect(engine.paused, isTrue);
   });
 
+  testWidgets('hiding and reopening barrage releases the old renderer without replaying hidden messages', (
+    tester,
+  ) async {
+    final controller = BarrageController();
+    Widget surface(bool visible) => MaterialApp(
+      home: SizedBox(
+        width: 400,
+        height: 200,
+        child: visible
+            ? FlameBarrageWidget(config: const BarrageConfig(), emojiAtlas: EmojiAtlas.instance, controller: controller)
+            : const SizedBox.shrink(),
+      ),
+    );
+
+    await tester.pumpWidget(surface(true));
+    await tester.pump();
+    final oldEngine = controller.engine as BarrageEngine;
+    controller.send(const BarrageItem(content: 'before hiding'));
+    expect(oldEngine.framePulseActive, isTrue);
+
+    await tester.pumpWidget(surface(false));
+    expect(controller.engine, isNull);
+    expect(oldEngine.framePulseActive, isFalse);
+    expect(oldEngine.pendingMessageCount, 0);
+    expect(oldEngine.activeCacheSize, 0);
+    controller.send(const BarrageItem(content: 'while hidden'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(oldEngine.framePulseActive, isFalse);
+
+    await tester.pumpWidget(surface(true));
+    await tester.pump();
+    final newEngine = controller.engine as BarrageEngine;
+    expect(newEngine, isNot(same(oldEngine)));
+    expect(newEngine.pendingMessageCount, 0);
+    expect(newEngine.framePulseActive, isFalse);
+    controller.send(const BarrageItem(content: 'after reopening'));
+    expect(newEngine.pendingMessageCount, 1);
+    expect(newEngine.framePulseActive, isTrue);
+    await tester.pumpWidget(surface(false));
+    expect(newEngine.framePulseActive, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
   test('barrage waiting queue drops oldest burst entries at its hard cap', () {
     final engine = BarrageEngine(config: const BarrageConfig(maxPendingCount: 2), emojiAtlas: EmojiAtlas.instance);
 

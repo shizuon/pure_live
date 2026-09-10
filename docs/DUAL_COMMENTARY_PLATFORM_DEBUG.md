@@ -2,6 +2,8 @@
 
 新增功能说明：[B 画面裁剪覆盖](COMMENTARY_VIDEO_OVERLAY.md)。下面的构建基线及验证记录属于历史批次，不代表新增覆盖功能已完成实机验收。
 
+2026-09-10 桌面卡顿候选另见 [排查记录](DESKTOP_PLAYBACK_STUTTER.md)。当前 Mac 强制软件解码和软件输出；下文 `auto-copy` 是 3.0.7 历史配置，不能用来判断当前版本的硬解状态。
+
 ## 当前实现基线
 
 - 上游基线：`liuchuancong/pure_live` `master`，提交 `fac506c76085a547af06ba8541473a836e108c16`。
