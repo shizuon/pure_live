@@ -1,5 +1,4 @@
 import 'package:pure_live/get/get.dart';
-import 'package:synchronized/synchronized.dart';
 import 'package:pure_live/modules/tags/tag_management_controller.dart';
 import 'package:pure_live/common/services/settings/log_controller.dart';
 import 'package:pure_live/common/services/settings/cache_controller.dart';
@@ -26,8 +25,6 @@ import 'package:pure_live/common/services/settings/danmaku_settings_controller.d
 class SettingsService extends GetxService {
   static SettingsService get to => Get.find<SettingsService>();
 
-  static final Lock _initLock = Lock();
-
   AppSettingsController get app => Get.find<AppSettingsController>();
   ExitSettingsController get exit => Get.find<ExitSettingsController>();
   StartupController get startup => Get.find<StartupController>();
@@ -53,43 +50,30 @@ class SettingsService extends GetxService {
   @override
   void onInit() {
     super.onInit();
-    _registerLockingLazyPuts();
+    _registerControllers();
   }
 
-  void _registerLockingLazyPuts() {
-    S lockInject<S extends GetxController>(S Function() builder) {
-      final instance = builder();
-
-      _initLock.synchronized(() async {
-        await Future.delayed(const Duration(milliseconds: 200));
-        if (instance.initialized) {
-          instance.onReady();
-        }
-      });
-      return instance;
-    }
-
-    Get.lazyPut(() => lockInject(() => StartupController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => AppSettingsController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => ThemeSettingsController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => WindowSizeController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => ProxySettingsController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => PlayerSettingsController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => DanmakuSettingsController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => VolumeSettingsController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => HistoryController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => RefreshConfigController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => FavoriteRoomController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => IptvSettingsController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => CacheController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => CookieSettingsController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => PageSettingsController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => WebDavController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => BackupController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => TagManagementController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => BiliBiliAccountService()), fenix: true);
-    Get.lazyPut(() => lockInject(() => FontSettingsController()), fenix: true);
-    Get.lazyPut(() => lockInject(() => LogController()), fenix: true);
+  void _registerControllers() {
+    Get.lazyPut(StartupController.new, fenix: true);
+    Get.lazyPut(AppSettingsController.new, fenix: true);
+    Get.lazyPut(ThemeSettingsController.new, fenix: true);
+    Get.lazyPut(WindowSizeController.new, fenix: true);
+    Get.lazyPut(ProxySettingsController.new, fenix: true);
+    Get.lazyPut(PlayerSettingsController.new, fenix: true);
+    Get.lazyPut(DanmakuSettingsController.new, fenix: true);
+    Get.lazyPut(VolumeSettingsController.new, fenix: true);
+    Get.lazyPut(HistoryController.new, fenix: true);
+    Get.lazyPut(RefreshConfigController.new, fenix: true);
+    Get.lazyPut(FavoriteRoomController.new, fenix: true);
+    Get.lazyPut(CacheController.new, fenix: true);
+    Get.lazyPut(CookieSettingsController.new, fenix: true);
+    Get.lazyPut(PageSettingsController.new, fenix: true);
+    Get.lazyPut(WebDavController.new, fenix: true);
+    Get.lazyPut(BackupController.new, fenix: true);
+    Get.lazyPut(TagManagementController.new, fenix: true);
+    Get.lazyPut(BiliBiliAccountService.new, fenix: true);
+    Get.lazyPut(FontSettingsController.new, fenix: true);
+    Get.lazyPut(LogController.new, fenix: true);
 
     Get.put(ExitSettingsController(), permanent: true);
     Get.put(IptvSettingsController(), permanent: true);
