@@ -1136,6 +1136,9 @@ jobs:
           test -f "PureLive-${VERSION}-macos-universal.zip"
           test -f "PureLive-${VERSION}-macos-universal.dmg"
 
+          unzip -tq "PureLive-${VERSION}-macos-universal.zip"
+          hdiutil verify "PureLive-${VERSION}-macos-universal.dmg"
+
           echo "=== macOS packages ==="
 
           ls -lh \
