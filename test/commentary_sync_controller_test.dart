@@ -22,6 +22,62 @@ import 'package:pure_live/player/models/player_state.dart';
 import 'package:rxdart/rxdart.dart' show BehaviorSubject;
 
 void main() {
+  test('replacing B during stable-playback wait cannot dispose the new player', () async {
+    final stableCheckEntered = Completer<void>();
+    final newPlayerOpened = Completer<void>();
+    final primary = _SyncPlayer(
+      position: const Duration(seconds: 30),
+      onBufferingRead: () {
+        if (!stableCheckEntered.isCompleted) stableCheckEntered.complete();
+      },
+    );
+    final companions = <_SyncPlayer>[];
+    final pool = PlayerPool(
+      factory: (_) async {
+        final player = _SyncPlayer(
+          position: const Duration(seconds: 27),
+          onOpen: (_) {
+            if (companions.length == 2) newPlayerOpened.complete();
+          },
+        );
+        companions.add(player);
+        return player;
+      },
+    );
+    final controller = CommentarySyncController(
+      primaryManager: _PlayerManager(primary: primary, pool: pool),
+      playerPool: pool,
+      platformSupportProbe: () => true,
+      resolver: const _Resolver(),
+    );
+    addTearDown(controller.dispose);
+    final videoRoom = LiveRoom(roomId: 'a', platform: 'test');
+    final oldActivation = controller.activate(
+      videoRoom: videoRoom,
+      audioRoom: LiveRoom(roomId: 'old', platform: 'test'),
+      primaryVolume: .6,
+    );
+    await stableCheckEntered.future;
+    expect(controller.state.value.status, CommentarySyncStatus.loading);
+    final newActivation = controller.activate(
+      videoRoom: videoRoom,
+      audioRoom: LiveRoom(roomId: 'new', platform: 'test'),
+      primaryVolume: .6,
+    );
+    await newPlayerOpened.future;
+    expect(companions, hasLength(2));
+    expect(companions.first.disposed, isTrue);
+    // The old stability check wakes after the replacement has acquired B.
+    await oldActivation;
+    expect(companions.last.disposed, isFalse);
+    expect(controller.companionPreviewPlayer, same(companions.last));
+    await newActivation;
+    expect(controller.isActive, isTrue);
+    expect(controller.state.value.audioRoom?.roomId, 'new');
+    expect(primary.lastVolume, 0);
+    expect(companions.last.lastVolume, .6);
+  });
+
   test('playback exhausts low-quality lines before resolving another tier and refreshes URLs on resync', () async {
     final events = <String>[];
     var resolveCount = 0;
@@ -493,9 +549,10 @@ class _PlayerManager extends PlayerManager {
 }
 
 class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer {
-  _SyncPlayer({required Duration position, this.onOpen}) : _currentPosition = position;
+  _SyncPlayer({required Duration position, this.onOpen, this.onBufferingRead}) : _currentPosition = position;
 
   final void Function(String)? onOpen;
+  final VoidCallback? onBufferingRead;
 
   final Duration _currentPosition;
   final BehaviorSubject<bool> _playing = BehaviorSubject.seeded(true);
@@ -577,7 +634,10 @@ class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer {
   bool get isReusable => false;
 
   @override
-  bool get isBufferingNow => _loading.value;
+  bool get isBufferingNow {
+    onBufferingRead?.call();
+    return _loading.value;
+  }
 
   @override
   bool get hasAudioTrack => true;

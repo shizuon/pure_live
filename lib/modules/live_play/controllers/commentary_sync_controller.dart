@@ -243,8 +243,12 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
         await _finishActivation(generation: generation, targetOffsetMs: targetOffsetMs);
         return;
       } catch (error) {
+        // Cancellation is not a failed CDN candidate. The next session may
+        // already own B; stale cleanup must not mute or dispose that player.
+        if (generation != _generation || _manualStop) return;
         lastError = error;
         await _restorePrimaryAudio();
+        if (generation != _generation || _manualStop) return;
         await _disposeCompanion();
         await _openAvailableCandidate(generation: generation);
       }
