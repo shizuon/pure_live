@@ -1,9 +1,9 @@
 {
-  "version": "3.0.16",
-  "build_number": 4104,
-  "version_num": 300164104,
+  "version": "3.0.17",
+  "build_number": 4105,
+  "version_num": 300174105,
   "android_abis": [],
-  "version_desc": "version: 3.0.16 测试版\n- 修复裁剪与覆盖切换时重复订阅导致的灰屏\n- 增加九点选区微调\n- 退出前等待播放器及数据库关闭",
+  "version_desc": "3.0.17 测试版：修复斗鱼切房后握手失败导致弹幕重连卡住；保留九点裁剪覆盖与退出清理修复。",
   "prerelease": true,
   "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
   "platforms": {
@@ -17,10 +17,10 @@
       "android_abis": []
     },
     "windows": {
-      "version": "3.0.16",
-      "build_number": 4104,
-      "version_num": 300164104,
-      "version_desc": "测试版：修复裁剪切换灰屏，增加九点微调与退出清理",
+      "version": "3.0.17",
+      "build_number": 4105,
+      "version_num": 300174105,
+      "version_desc": "3.0.17 测试版：修复斗鱼切房后握手失败导致弹幕重连卡住；保留九点裁剪覆盖与退出清理修复。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
       "windows_msix_available": false
@@ -34,10 +34,10 @@
       "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
     },
     "macos": {
-      "version": "3.0.16",
-      "build_number": 4104,
-      "version_num": 300164104,
-      "version_desc": "测试版：修复裁剪切换灰屏，增加九点微调，处理退出时数据库释放崩溃",
+      "version": "3.0.17",
+      "build_number": 4105,
+      "version_num": 300174105,
+      "version_desc": "3.0.17 测试版：修复斗鱼切房后握手失败导致弹幕重连卡住；保留九点裁剪覆盖与退出清理修复。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },

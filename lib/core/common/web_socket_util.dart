@@ -49,6 +49,7 @@ class WebScoketUtils {
   final Iterable<String>? protocols;
   final Duration? inactivityTimeout;
   final Duration reconnectBaseDelay;
+  final Duration socketCloseTimeout;
   final WebSocketConnector connector;
 
   WebScoketUtils({
@@ -64,6 +65,7 @@ class WebScoketUtils {
     this.protocols,
     this.inactivityTimeout,
     this.reconnectBaseDelay = const Duration(seconds: 15),
+    this.socketCloseTimeout = const Duration(seconds: 2),
     this.connector = _connectIoWebSocket,
     List<String>? serverUrls,
   }) : serverUrls = _uniqueEndpoints(url, backupUrl, serverUrls);
@@ -98,13 +100,12 @@ class WebScoketUtils {
 
     reconnectTimer?.cancel();
     reconnectTimer = null;
-    await _disposeSocket();
-
-    if (retry && serverUrls.length > 1) {
-      _endpointIndex = (_endpointIndex + 1) % serverUrls.length;
-    }
-
     try {
+      await _disposeSocket();
+      if (_manualClose || generation != _generation) return;
+      if (retry && serverUrls.length > 1) {
+        _endpointIndex = (_endpointIndex + 1) % serverUrls.length;
+      }
       final endpoint = serverUrls[_endpointIndex % serverUrls.length];
       final channel = connector(
         endpoint,
@@ -113,12 +114,31 @@ class WebScoketUtils {
         headers: headers,
       );
       webSocket = channel;
+      // Subscribe before awaiting ready. IOWebSocketChannel reports handshake
+      // failures on BOTH ready and stream. Without consuming stream's done,
+      // its sink.close() can never complete and the first retry stalls here.
+      var ended = false;
+      streamSubscription = channel.stream.listen(
+        (data) {
+          if (!_manualClose && generation == _generation) receiveMessage(data);
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          ended = true;
+          if (!_manualClose && generation == _generation) _scheduleReconnect(error.toString());
+        },
+        onDone: () {
+          ended = true;
+          if (!_manualClose && generation == _generation) {
+            _scheduleReconnect('WebSocket closed (${channel.closeCode ?? "no code"})');
+          }
+        },
+        cancelOnError: false,
+      );
       await channel.ready;
       if (_manualClose || generation != _generation) {
-        await channel.sink.close();
         return;
       }
-      _ready(channel, generation);
+      if (!ended) _ready(generation);
     } catch (error) {
       if (!_manualClose && generation == _generation) {
         _scheduleReconnect(error.toString());
@@ -131,27 +151,14 @@ class WebScoketUtils {
     }
   }
 
-  void _ready(WebSocketChannel channel, int generation) {
+  void _ready(int generation) {
     status = SocketStatus.connected;
     reconnectTimer?.cancel();
     reconnectTimer = null;
     _lastMessageAt = DateTime.now();
 
-    streamSubscription = channel.stream.listen(
-      (data) {
-        if (!_manualClose && generation == _generation) receiveMessage(data);
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!_manualClose && generation == _generation) _scheduleReconnect(error.toString());
-      },
-      onDone: () {
-        if (!_manualClose && generation == _generation) _scheduleReconnect('WebSocket closed');
-      },
-      cancelOnError: true,
-    );
-
     onReady?.call();
-    _initHeartBeat();
+    if (!_manualClose && generation == _generation && status == SocketStatus.connected) _initHeartBeat();
   }
 
   void _initHeartBeat() {
@@ -215,7 +222,9 @@ class WebScoketUtils {
   }
 
   Future<void> _disposeSocket() async {
-    await streamSubscription?.cancel();
+    // Detach ownership synchronously. A late cleanup must never pick up and
+    // close a replacement socket created after its first await.
+    final subscription = streamSubscription;
     streamSubscription = null;
     heartBeatTimer?.cancel();
     heartBeatTimer = null;
@@ -223,7 +232,13 @@ class WebScoketUtils {
     webSocket = null;
     _lastMessageAt = null;
     try {
-      await socket?.sink.close();
+      // Closing during a pending handshake also needs a deadline: the channel
+      // cannot cancel its underlying connection Future. It is already fenced
+      // by generation, and may complete cleanup after this room has left.
+      await Future.wait<void>([
+        if (subscription != null) subscription.cancel(),
+        if (socket != null) socket.sink.close().then<void>((_) {}),
+      ]).timeout(socketCloseTimeout);
     } catch (_) {}
   }
 

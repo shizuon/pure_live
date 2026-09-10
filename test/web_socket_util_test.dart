@@ -4,8 +4,89 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pure_live/core/common/web_socket_util.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
 
 void main() {
+  test('a real channel handshake failure cannot strand the first retry in sink.close', () async {
+    var attempts = 0;
+    var ready = 0;
+    final recoveredReady = Completer<void>();
+    final recovered = _FakeWebSocketChannel();
+    final socket = WebScoketUtils(
+      url: 'wss://example.invalid',
+      heartBeatTime: 45000,
+      reconnectBaseDelay: const Duration(milliseconds: 10),
+      onReady: () {
+        ready++;
+        recoveredReady.complete();
+      },
+      connector: (_, {connectTimeout, protocols, headers}) {
+        attempts++;
+        // Use the real adapter, whose stream and sink lifecycles are coupled.
+        // A plain fake sink returning Future.value hid this production bug.
+        if (attempts == 1) return IOWebSocketChannel(Future.error(StateError('handshake failed')));
+        return recovered;
+      },
+    );
+    addTearDown(socket.close);
+    await socket.connect();
+    expect(socket.status, SocketStatus.failed);
+    expect(ready, 0);
+    await recoveredReady.future.timeout(const Duration(seconds: 1));
+    expect(attempts, 2);
+    expect(ready, 1);
+    expect(socket.status, SocketStatus.connected);
+    await socket.close();
+    expect(socket.reconnectTimer, isNull);
+    expect(attempts, 2);
+  });
+
+  test('repeated real handshake failures keep scheduling new attempts', () async {
+    var attempts = 0;
+    final fourthAttempt = Completer<void>();
+    final socket = WebScoketUtils(
+      url: 'wss://example.invalid',
+      heartBeatTime: 45000,
+      reconnectBaseDelay: const Duration(milliseconds: 10),
+      connector: (_, {connectTimeout, protocols, headers}) {
+        attempts++;
+        if (attempts == 4) fourthAttempt.complete();
+        return IOWebSocketChannel(Future.error(StateError('unavailable')));
+      },
+    );
+    addTearDown(socket.close);
+    await socket.connect();
+    await fourthAttempt.future.timeout(const Duration(seconds: 1));
+    expect(attempts, 4);
+    await socket.close();
+    expect(socket.reconnectTimer, isNull);
+  });
+
+  test('leaving during a pending handshake finishes cleanup and ignores its late failure', () {
+    fakeAsync((async) {
+      final handshake = Completer<Never>();
+      var closed = false;
+      var retries = 0;
+      final socket = WebScoketUtils(
+        url: 'wss://example.invalid',
+        heartBeatTime: 45000,
+        onReconnect: () => retries++,
+        connector: (_, {connectTimeout, protocols, headers}) => IOWebSocketChannel(handshake.future),
+      );
+      unawaited(socket.connect());
+      async.flushMicrotasks();
+      unawaited(socket.close().then((_) => closed = true));
+      async.elapse(const Duration(seconds: 2));
+      expect(closed, isTrue);
+      handshake.completeError(StateError('late failed connection'));
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 30));
+      expect(retries, 0);
+      expect(socket.status, SocketStatus.closed);
+      expect(socket.webSocket, isNull);
+    });
+  });
+
   test('danmaku reconnects every 15 seconds until manually closed', () {
     fakeAsync((async) {
       final socket = _ReconnectProbe();
