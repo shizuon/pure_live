@@ -5,6 +5,7 @@ import 'package:pure_live/plugins/db_service.dart';
 import 'package:pure_live/common/utils/hive_pref_util.dart';
 import 'package:pure_live/modules/auth/auth_controller.dart';
 import 'package:pure_live/recorder/services/cache_service.dart';
+import 'package:pure_live/recorder/services/recorder_task_store.dart';
 import 'package:pure_live/recorder/consts/recorder_config.dart';
 import 'package:pure_live/recorder/consts/recorder_keys.dart';
 import 'package:pure_live/routes/route_observer_controller.dart';
@@ -33,6 +34,7 @@ class InitialServices {
     // can therefore be opened before the delayed heavy-service warm-up runs
     // (notably from a fast search result tap).  Register the dependency chain
     // lazily now so Get.find never races the three-second warm-up.
+    Get.lazyPut(() => RecorderTaskStore(), fenix: true);
     Get.lazyPut(() => CacheService(), fenix: true);
     Get.lazyPut(() => RecordSettingsController(), fenix: true);
     Get.lazyPut(() => RecorderController(), fenix: true);

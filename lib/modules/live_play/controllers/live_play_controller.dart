@@ -19,7 +19,7 @@ import 'package:pure_live/modules/live_play/states/room_state.dart';
 import 'package:pure_live/modules/live_play/states/player_state.dart';
 import 'package:pure_live/modules/live_play/states/live_play_state.dart';
 import 'package:pure_live/modules/live_play/controllers/player_state.dart';
-import 'package:pure_live/recorder/pages/recorder/recorder_controller.dart';
+import 'package:pure_live/recorder/services/recorder_task_store.dart';
 import 'package:pure_live/modules/live_play/controllers/timer_controller.dart';
 import 'package:pure_live/modules/live_play/controllers/player_controller.dart';
 import 'package:pure_live/modules/live_play/controllers/danmaku_controller.dart';
@@ -44,7 +44,7 @@ class LivePlayController extends GetxController
   late final DanmakuController danmakuController;
   late final PlayerController playerController;
 
-  final RecorderController recorderController = Get.find<RecorderController>();
+  final RecorderTaskStore recorderTasks = Get.find<RecorderTaskStore>();
   final LocalInteractionController localInteractionController = Get.find<LocalInteractionController>();
 
   @override

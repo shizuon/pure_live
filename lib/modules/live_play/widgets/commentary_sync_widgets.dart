@@ -46,7 +46,7 @@ class CommentarySyncButton extends StatelessWidget {
 }
 
 bool _isRecording(LiveRoom room) {
-  final tasks = Get.find<LivePlayController>().recorderController.tasks;
+  final tasks = Get.find<LivePlayController>().recorderTasks.tasks;
   final task = tasks.firstWhereOrNull((item) => item.platform == room.platform && item.roomId == room.roomId);
   return task?.status == RecordStatus.running ||
       task?.status == RecordStatus.reconnecting ||

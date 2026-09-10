@@ -16,6 +16,7 @@ import 'package:pure_live/recorder/consts/recorder_keys.dart';
 import 'package:pure_live/recorder/models/record_status.dart';
 import 'package:pure_live/recorder/ffmpeg/ffmpeg_manager.dart';
 import 'package:pure_live/recorder/services/cache_service.dart';
+import 'package:pure_live/recorder/services/recorder_task_store.dart';
 import 'package:pure_live/recorder/ffmpeg/ffmpeg_scheduler.dart';
 import 'package:pure_live/recorder/models/live_record_task.dart';
 import 'package:pure_live/recorder/ffmpeg/ffmpeg_command_builder.dart';
@@ -34,7 +35,8 @@ class RecorderController extends GetxService {
   final RecordSettingsController settings = Get.find<RecordSettingsController>();
   final FFmpegManager ffmpeg = FFmpegManager.to;
   final FFmpegScheduler scheduler = FFmpegScheduler.instance;
-  final RxList<LiveRecordTask> tasks = <LiveRecordTask>[].obs;
+  final RecorderTaskStore _taskStore = Get.find<RecorderTaskStore>();
+  RxList<LiveRecordTask> get tasks => _taskStore.tasks;
 
   final Map<String, Timer> _pollTimers = <String, Timer>{};
   final Map<String, int> _pollFailures = <String, int>{};
@@ -56,9 +58,12 @@ class RecorderController extends GetxService {
 
   Timer? _persistTimer;
   Timer? _resourceMonitor;
+  final List<Worker> _resourceWorkers = [];
+  Future<void>? _restoration;
   bool _persistDirty = false;
   bool _isClosing = false;
   bool _resourceCheckRunning = false;
+  bool _resourceCheckPending = false;
   Future<void>? _persistInFlight;
   late final StreamSubscription<FFmpegEvent> _ffmpegSub;
 
@@ -68,11 +73,15 @@ class RecorderController extends GetxService {
   @override
   void onInit() {
     super.onInit();
-    _resourceMonitor = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (settings.enableCacheLimit.value) unawaited(_checkResources());
-    });
+    _resourceWorkers.add(ever(settings.enableCacheLimit, (_) => _updateResourceMonitor(checkNow: true)));
+    _resourceWorkers.add(ever(tasks, (_) => _updateResourceMonitor()));
+    _updateResourceMonitor(checkNow: true);
     _ffmpegSub = ffmpeg.stream.listen((event) => unawaited(_handleFFmpegEvent(event)));
-    unawaited(restoreAndAutoPoll());
+    unawaited(
+      restoreAndAutoPoll().catchError((Object error, StackTrace stackTrace) {
+        developer.log('Recorder restoration failed: $error', name: 'RecorderController', stackTrace: stackTrace);
+      }),
+    );
   }
 
   Future<void> _handleFFmpegEvent(FFmpegEvent event) async {
@@ -646,7 +655,12 @@ class RecorderController extends GetxService {
       if (identical(_lifecycleCompleters[task.taskId], lifecycle)) {
         _lifecycleCompleters.remove(task.taskId);
       }
-      if (protectedDirectory != null) CacheService.to.releaseDirectory(protectedDirectory);
+      if (protectedDirectory != null) {
+        CacheService.to.releaseDirectory(protectedDirectory);
+        // The final output may cross the limit between periodic checks. Check
+        // once after releasing it instead of keeping an idle timer alive.
+        unawaited(_checkResources());
+      }
     }
   }
 
@@ -764,11 +778,34 @@ class RecorderController extends GetxService {
     await _pollTask(task);
   }
 
+  void _updateResourceMonitor({bool checkNow = false}) {
+    if (_isClosing) return;
+    final enabled = settings.enableCacheLimit.value;
+    final hasWriter = tasks.any((task) => task.status.isActive || task.status == RecordStatus.queued);
+    if (enabled && hasWriter) {
+      if (_resourceMonitor == null) {
+        _resourceMonitor = Timer.periodic(const Duration(minutes: 1), (_) => unawaited(_checkResources()));
+        checkNow = true;
+      }
+    } else {
+      _resourceMonitor?.cancel();
+      _resourceMonitor = null;
+    }
+    // Check existing files on explicit recorder use or enabling the limit,
+    // but keep no periodic scan while no task can grow the directory.
+    if (enabled && checkNow) unawaited(_checkResources());
+  }
+
   Future<void> _checkResources() async {
-    if (_resourceCheckRunning || !settings.enableCacheLimit.value) return;
+    if (_isClosing || !settings.enableCacheLimit.value) return;
+    if (_resourceCheckRunning) {
+      _resourceCheckPending = true;
+      return;
+    }
     _resourceCheckRunning = true;
     try {
       final cacheMB = await CacheService.to.getCacheSize();
+      if (_isClosing || !settings.enableCacheLimit.value) return;
       if (cacheMB > settings.maxCacheMB.value) {
         await CacheService.to.enforceLimit(maxMB: settings.maxCacheMB.value.toDouble());
         await settings.refreshCacheSize();
@@ -777,6 +814,10 @@ class RecorderController extends GetxService {
       developer.log('Recorder cache check failed: $error', name: 'RecorderController');
     } finally {
       _resourceCheckRunning = false;
+      if (_resourceCheckPending) {
+        _resourceCheckPending = false;
+        unawaited(_checkResources());
+      }
     }
   }
 
@@ -802,52 +843,33 @@ class RecorderController extends GetxService {
     }
   }
 
-  Future<void> restoreAndAutoPoll() async {
-    final raw = HivePrefUtil.getString(RecorderKeys.recorderTasks);
-    if (raw == null || raw.trim().isEmpty) return;
+  Future<void> restoreAndAutoPoll() {
+    final pending = _restoration;
+    if (pending != null) return pending;
+    late final Future<void> operation;
+    operation = _restoreAndAutoPoll().catchError((Object error, StackTrace stackTrace) {
+      // A failed filesystem/permission check must remain retryable on use.
+      if (identical(_restoration, operation)) _restoration = null;
+      Error.throwWithStackTrace(error, stackTrace);
+    });
+    return _restoration = operation;
+  }
 
-    final restored = <LiveRecordTask>[];
-    final interruptedTaskIds = <String>{};
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is List) {
-        for (final entry in decoded) {
-          if (entry is! Map) continue;
-          try {
-            final task = LiveRecordTask.fromJson(Map<String, dynamic>.from(entry));
-            if (task.roomId.trim().isEmpty || !Sites.isSupported(task.platform)) continue;
-            if (const <RecordStatus>{
-              RecordStatus.preparing,
-              RecordStatus.running,
-              RecordStatus.reconnecting,
-              RecordStatus.processing,
-            }.contains(task.status)) {
-              interruptedTaskIds.add(task.taskId);
-            }
-            task
-              ..status = RecordStatus.stopped
-              ..wasStoppedByUser = false;
-            if (restored.every((candidate) => candidate.taskId != task.taskId)) restored.add(task);
-          } catch (error) {
-            developer.log('Skipped malformed recorder task: $error', name: 'RecorderController');
-          }
-        }
-      }
-    } catch (error) {
-      developer.log('Restore recorder task list failed: $error', name: 'RecorderController');
-    }
-
-    restored.sort((left, right) => left.status.order.compareTo(right.status.order));
-    tasks.assignAll(restored);
+  Future<void> _restoreAndAutoPoll() async {
+    final restored = List<LiveRecordTask>.of(tasks);
+    if (restored.isEmpty) return;
+    final interruptedTaskIds = Set<String>.of(_taskStore.interruptedTaskIds);
     schedulePersist();
 
     // A process kill cannot run FFmpeg's completion callback. Finish only
     // tasks that were persisted in an active lifecycle; completed/manual
     // tasks are never reprocessed merely because a TS file still exists.
     for (final task in restored.where((candidate) => interruptedTaskIds.contains(candidate.taskId))) {
+      if (_isClosing) return;
       await _recoverInterruptedRecording(task);
+      _taskStore.interruptedTaskIds.remove(task.taskId);
     }
-    if (!settings.autoStartOnBoot.value || restored.isEmpty || !await requestStoragePermission()) return;
+    if (_isClosing || !settings.autoStartOnBoot.value || restored.isEmpty || !await requestStoragePermission()) return;
 
     for (final task in restored) {
       await refreshTaskStatus(task);
@@ -868,6 +890,7 @@ class RecorderController extends GetxService {
       await settings.refreshCacheSize();
     } finally {
       CacheService.to.releaseDirectory(directory);
+      unawaited(_checkResources());
     }
   }
 
@@ -900,6 +923,10 @@ class RecorderController extends GetxService {
     _attemptProgress.clear();
     _rapidRecoveryTasks.clear();
     _resourceMonitor?.cancel();
+    for (final worker in _resourceWorkers) {
+      worker.dispose();
+    }
+    _resourceWorkers.clear();
     _persistTimer?.cancel();
     _persistTimer = null;
     unawaited(scheduler.clearAll());

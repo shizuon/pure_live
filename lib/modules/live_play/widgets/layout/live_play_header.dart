@@ -109,7 +109,7 @@ class LivePlayHeader extends StatelessWidget implements PreferredSizeWidget {
       }
       return RecordActionButton(
         room: room,
-        recorderController: controller.recorderController,
+        taskStore: controller.recorderTasks,
         onOpenRecordCenter: controller.openRecordCenter,
         compactHeader: compactHeader,
       );

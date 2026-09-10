@@ -1,19 +1,21 @@
 import 'package:remixicon/remixicon.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/recorder/models/record_status.dart';
+import 'package:pure_live/recorder/services/recorder_task_store.dart';
 import 'package:pure_live/recorder/pages/recorder/recorder_controller.dart';
 
 class RecordActionButton extends StatelessWidget {
   const RecordActionButton({
     super.key,
     required this.room,
-    required this.recorderController,
+    required this.taskStore,
     required this.onOpenRecordCenter,
     this.compactHeader = false,
   });
 
   final dynamic room;
-  final RecorderController recorderController;
+  final RecorderTaskStore taskStore;
+  RecorderController get recorderController => RecorderController.to;
   final Future<void> Function() onOpenRecordCenter;
   final bool compactHeader;
 
@@ -24,9 +26,7 @@ class RecordActionButton extends StatelessWidget {
     }
 
     return Obx(() {
-      final task = recorderController.tasks.firstWhereOrNull(
-        (t) => t.platform == room.platform && t.roomId == room.roomId,
-      );
+      final task = taskStore.tasks.firstWhereOrNull((t) => t.platform == room.platform && t.roomId == room.roomId);
 
       final exists = task != null;
       final isRunning = _isTaskRunning(task);
@@ -132,6 +132,7 @@ class RecordActionButton extends StatelessWidget {
       return;
     }
 
+    if (action != 'page') await recorderController.restoreAndAutoPoll();
     switch (action) {
       case "start":
         await _startRecording(task: task, exists: exists, isRunning: isRunning);
