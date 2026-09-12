@@ -3,6 +3,7 @@ import 'package:pure_live/common/index.dart';
 import 'package:pure_live/common/consts/app_consts.dart';
 import 'package:pure_live/player/utils/player_consts.dart';
 import 'package:pure_live/player/core/portrait_stream_support.dart';
+import 'package:pure_live/player/models/macos_decode_mode.dart';
 
 @visibleForTesting
 String defaultVideoPlayerKeyForPlatform(TargetPlatform platform) => platform == TargetPlatform.iOS ? 'ijk' : 'mpv';
@@ -10,6 +11,11 @@ String defaultVideoPlayerKeyForPlatform(TargetPlatform platform) => platform == 
 String get _defaultVideoPlayerKey => defaultVideoPlayerKeyForPlatform(defaultTargetPlatform);
 
 class PlayerSettingsController extends GetxController {
+  PlayerSettingsController({MacosDecodeSession? decodeSession})
+    : _decodeSession = decodeSession ?? MacosDecodeSession.application;
+
+  final MacosDecodeSession _decodeSession;
+
   static PlayerSettingsController get to => Get.find<PlayerSettingsController>();
 
   final RxInt videoFitIndex = hiveInt('videoFitIndex', 0);
@@ -21,6 +27,18 @@ class PlayerSettingsController extends GetxController {
   final RxString preferResolutionCellular = hiveString('preferResolutionCellular', PlayerConsts.resolutions.first);
 
   final RxBool enableCodec = hiveBool('enableCodec', true);
+
+  final RxString macosDecodeModeName = hiveString('macosDecodeMode', MacosDecodeMode.software.name);
+
+  MacosDecodeMode get macosDecodeMode => MacosDecodeMode.parse(macosDecodeModeName.v);
+
+  // Freeze once the first native player is created. Changing a texture's render
+  // API in place is unsafe; subsequently created B/multiview players must use
+  // the same policy as A until the application is restarted.
+  MacosDecodeMode get activeMacosDecodeMode => _decodeSession.activate(macosDecodeMode);
+  MacosDecodeMode? get initializedMacosDecodeMode => _decodeSession.initializedMode;
+
+  void changeMacosDecodeMode(MacosDecodeMode mode) => macosDecodeModeName.v = mode.name;
 
   final RxBool playerCompatMode = hiveBool('playerCompatMode', false);
 
@@ -123,6 +141,7 @@ class PlayerSettingsController extends GetxController {
 
   void resetMpvPlayerSettings() {
     enableCodec.v = true;
+    changeMacosDecodeMode(MacosDecodeMode.software);
     playerCompatMode.v = false;
     customPlayerOutput.v = false;
     videoOutputDriver.v = 'gpu';
@@ -145,6 +164,7 @@ class PlayerSettingsController extends GetxController {
       'preferResolution': preferResolution.v,
       'preferResolutionCellular': preferResolutionCellular.v,
       'enableCodec': enableCodec.v,
+      'macosDecodeMode': macosDecodeMode.name,
       'playerCompatMode': playerCompatMode.v,
       'customPlayerOutput': customPlayerOutput.v,
       'videoOutputDriver': videoOutputDriver.v,
@@ -176,6 +196,7 @@ class PlayerSettingsController extends GetxController {
     preferResolutionCellular.v = json['preferResolutionCellular'] ?? PlayerConsts.resolutions.first;
 
     enableCodec.v = json['enableCodec'] ?? true;
+    changeMacosDecodeMode(MacosDecodeMode.parse(json['macosDecodeMode']));
 
     playerCompatMode.v = json['playerCompatMode'] ?? false;
 
@@ -235,6 +256,7 @@ class PlayerSettingsController extends GetxController {
       'preferResolutionCellular': player['preferResolutionCellular'] ?? PlayerConsts.resolutions.first,
 
       'enableCodec': player['enableCodec'] ?? true,
+      'macosDecodeMode': MacosDecodeMode.parse(player['macosDecodeMode']).name,
 
       'playerCompatMode': player['playerCompatMode'] ?? false,
 

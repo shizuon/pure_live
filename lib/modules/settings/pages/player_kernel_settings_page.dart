@@ -6,6 +6,10 @@ import 'package:url_launcher/url_launcher_string.dart';
 import 'package:pure_live/player/utils/player_consts.dart';
 import 'package:pure_live/player/models/player_engine.dart';
 import 'package:pure_live/common/global/platform_utils.dart';
+import 'package:pure_live/modules/settings/widgets/macos_decode_settings.dart';
+import 'package:pure_live/player/adapters/media_kit_adapter.dart';
+import 'package:pure_live/player/models/player_slot.dart';
+import 'package:pure_live/player/utils/macos_decoder_status.dart';
 
 class PlayerKernelSettingsPage extends GetView<SettingsService> {
   const PlayerKernelSettingsPage({super.key});
@@ -57,12 +61,13 @@ class PlayerKernelSettingsPage extends GetView<SettingsService> {
                 ),
               );
             }),
-            context.buildSwitchTile(
-              icon: Remix.speed_up_line,
-              title: i18n('enable_codec'),
-              subtitle: i18n("gpu_decode"),
-              value: SettingsService.to.player.enableCodec,
-            ),
+            if (!PlatformUtils.isMacOS)
+              context.buildSwitchTile(
+                icon: Remix.speed_up_line,
+                title: i18n('enable_codec'),
+                subtitle: i18n("gpu_decode"),
+                value: SettingsService.to.player.enableCodec,
+              ),
             if (PlatformUtils.isWindows)
               context.buildSwitchTile(
                 icon: Remix.image_edit_line,
@@ -77,6 +82,8 @@ class PlayerKernelSettingsPage extends GetView<SettingsService> {
               value: SettingsService.to.player.useHardStopOnExit,
             ),
           ]),
+          if (PlatformUtils.isMacOS)
+            MacosDecodeSettings(settings: SettingsService.to.player, readStatus: _readMacosDecoderStatus),
           Obx(() {
             String activeKey = SettingsService.to.player.videoPlayerKey.v;
             if (PlayerConsts.engines[activeKey] != PlayerEngine.mediaKit) {
@@ -172,18 +179,19 @@ class PlayerKernelSettingsPage extends GetView<SettingsService> {
         context.buildModernCard([
           context.buildSwitchTile(
             icon: Remix.code_box_line,
-            title: i18n("custom_output_hwdec"),
+            title: i18n(PlatformUtils.isMacOS ? 'macos_custom_audio_output' : 'custom_output_hwdec'),
             value: SettingsService.to.player.customPlayerOutput,
           ),
-          Obx(
-            () => context.buildMenuTile<String>(
-              title: i18n("video_output_driver"),
-              icon: Remix.movie_line,
-              value: SettingsService.to.player.videoOutputDriver.v,
-              valueMap: PlayerConsts.videoOutputDrivers,
-              onChanged: (e) => SettingsService.to.player.videoOutputDriver.v = e,
+          if (!PlatformUtils.isMacOS)
+            Obx(
+              () => context.buildMenuTile<String>(
+                title: i18n("video_output_driver"),
+                icon: Remix.movie_line,
+                value: SettingsService.to.player.videoOutputDriver.v,
+                valueMap: PlayerConsts.videoOutputDrivers,
+                onChanged: (e) => SettingsService.to.player.videoOutputDriver.v = e,
+              ),
             ),
-          ),
           Obx(
             () => context.buildMenuTile<String>(
               title: i18n("audio_output_driver"),
@@ -193,18 +201,35 @@ class PlayerKernelSettingsPage extends GetView<SettingsService> {
               onChanged: (e) => SettingsService.to.player.audioOutputDriver.v = e,
             ),
           ),
-          Obx(
-            () => context.buildMenuTile<String>(
-              title: i18n("hardware_decoder"),
-              icon: Remix.cpu_line,
-              value: SettingsService.to.player.videoHardwareDecoder.v,
-              valueMap: PlayerConsts.hardwareDecoder,
-              onChanged: (e) => SettingsService.to.player.videoHardwareDecoder.v = e,
+          if (!PlatformUtils.isMacOS)
+            Obx(
+              () => context.buildMenuTile<String>(
+                title: i18n("hardware_decoder"),
+                icon: Remix.cpu_line,
+                value: SettingsService.to.player.videoHardwareDecoder.v,
+                valueMap: PlayerConsts.hardwareDecoder,
+                onChanged: (e) => SettingsService.to.player.videoHardwareDecoder.v = e,
+              ),
             ),
-          ),
         ]),
       ],
     );
+  }
+
+  Future<Map<String, MacosDecoderStatus>> _readMacosDecoderStatus() async {
+    final service = GlobalPlayerService.instance;
+    final main = service.initialized ? service.playerManager.currentPlayer : null;
+    final commentary = service.initialized
+        ? service.playerPool.cachedPlayer(PlayerEngine.mediaKit, PlayerSlot.commentaryAudio)
+        : null;
+    final result = <String, MacosDecoderStatus>{};
+    for (final entry in {'A': main, 'B': commentary}.entries) {
+      final adapter = entry.value;
+      result[entry.key] = adapter is MediaKitAdapter
+          ? await adapter.readMacosDecoderStatus()
+          : const MacosDecoderStatus(MacosDecoderState.inactive);
+    }
+    return result;
   }
 
   // 播放器选择弹窗

@@ -20,6 +20,8 @@ import 'package:pure_live/player/utils/live_buffer_policy.dart';
 import 'package:pure_live/common/utils/latest_async_value_queue.dart';
 import 'package:pure_live/player/interface/media_kit_player_accessor.dart';
 import 'package:pure_live/player/widgets/viewport_sized_video.dart';
+import 'package:pure_live/player/models/macos_decode_mode.dart';
+import 'package:pure_live/player/utils/macos_decoder_status.dart';
 
 @visibleForTesting
 ({int width, int height})? resolveMediaKitDisplaySize(VideoParams params) {
@@ -37,7 +39,7 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
   ///
   /// 单一事实来源：主播放器（[MediaKitAdapter.init]）与 multiview 每格播放器
   /// 都必须使用同一套属性（seek 白名单、探测时长、LiveBufferPolicy 缓冲上限、
-  /// 网络超时、音频驱动、代理、macOS 硬解关闭），避免两处配置漂移。
+  /// 网络超时、音频驱动、代理、macOS 解码策略），避免两处配置漂移。
   static Future<void> applyNativeLiveProperties(dynamic native) async {
     await native.setProperty('force-seekable', 'yes');
     await native.setProperty(
@@ -64,8 +66,11 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
     // frame failure. This preserves the low-power fast path on compatible
     // devices while making unsupported profiles fall back to software instead
     // of leaving a black Surface behind. mpv's larger default can skip several
-    // live packets before the fallback is attempted.
-    await native.setProperty('hwdec-software-fallback', '1');
+    // live packets before the fallback is attempted. Mac strict mode opts out.
+    await native.setProperty(
+      'hwdec-software-fallback',
+      PlatformUtils.isMacOS ? SettingsService.to.player.activeMacosDecodeMode.softwareFallback : '1',
+    );
 
     if (SettingsService.to.player.customPlayerOutput.v) {
       await native.setProperty('ao', SettingsService.to.player.audioOutputDriver.v);
@@ -80,7 +85,7 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
     }
 
     if (PlatformUtils.isMacOS) {
-      await native.setProperty('hwdec', 'no');
+      await native.setProperty('hwdec', SettingsService.to.player.activeMacosDecodeMode.hwdec);
     }
 
     if (PlatformUtils.isWindows && SettingsService.to.player.enableRtxVsr.value) {
@@ -102,6 +107,24 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
   String? _currentUrl;
 
   bool _isAudioOnly = false;
+
+  MacosHardwareDecodeGuard? _hardwareDecodeGuard;
+
+  Future<MacosDecoderStatus> readMacosDecoderStatus() async {
+    if (!_initialized || _disposed || _currentUrl == null) {
+      return const MacosDecoderStatus(MacosDecoderState.inactive);
+    }
+    return MacosDecoderStatus.read(
+      (property) async => await (_player.platform as dynamic).getProperty(property) as String,
+      videoEnabled: !_isAudioOnly,
+    );
+  }
+
+  void _rejectSoftwareDecode() => _emitError(
+    StateError(i18n('macos_decode_rejected')),
+    StackTrace.current,
+    PlayerErrorType.native,
+  );
 
   late final LatestAsyncValueQueue<bool> _audioModeTransitions;
 
@@ -183,7 +206,9 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
       // =========================
       // controller
       // =========================
-      _controller = SettingsService.to.player.playerCompatMode.v
+      _controller = PlatformUtils.isMacOS
+          ? VideoController(_player, configuration: SettingsService.to.player.activeMacosDecodeMode.configuration())
+          : SettingsService.to.player.playerCompatMode.v
           ? VideoController(
               _player,
               configuration: const VideoControllerConfiguration(vo: 'mediacodec_embed', hwdec: 'mediacodec'),
@@ -193,20 +218,36 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
               _player,
               configuration: VideoControllerConfiguration(
                 vo: SettingsService.to.player.videoOutputDriver.v,
-                hwdec: PlatformUtils.isMacOS ? 'no' : SettingsService.to.player.videoHardwareDecoder.v,
-                enableHardwareAcceleration: !PlatformUtils.isMacOS,
+                hwdec: SettingsService.to.player.videoHardwareDecoder.v,
+                enableHardwareAcceleration: true,
               ),
             )
           : VideoController(
               _player,
               configuration: VideoControllerConfiguration(
-                enableHardwareAcceleration: PlatformUtils.isMacOS ? false : SettingsService.to.player.enableCodec.v,
-                hwdec: PlatformUtils.isMacOS ? 'no' : null,
+                enableHardwareAcceleration: SettingsService.to.player.enableCodec.v,
                 androidAttachSurfaceAfterVideoParameters: false,
               ),
             );
 
       await _bindListeners();
+
+      if (PlatformUtils.isMacOS && SettingsService.to.player.activeMacosDecodeMode == MacosDecodeMode.hardwareOnly) {
+        _hardwareDecodeGuard = MacosHardwareDecodeGuard(
+          native: _player.platform,
+          pause: _player.pause,
+          onRejected: _rejectSoftwareDecode,
+        );
+        try {
+          await _hardwareDecodeGuard!.attach();
+        } catch (_) {
+          // A failed strict-mode setup must not leave a native player outside
+          // the pool (init has not completed, so the pool cannot own it yet).
+          await _cancelAllSubscriptions();
+          await _player.dispose();
+          rethrow;
+        }
+      }
 
       _initialized = true;
 
@@ -245,6 +286,7 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
       return;
     }
     _currentUrl = url;
+    _hardwareDecodeGuard?.suspend();
 
     try {
       _loadingSubject.add(true);
@@ -517,7 +559,7 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
       },
     );
 
-    // macOS uses the software output for HDR/window compatibility. Avoid
+    // macOS defaults to software output for HDR/window compatibility. Avoid
     // converting a source-sized BGRA frame when a contained video is displayed
     // in a smaller viewport. Other fits keep source resolution on macOS so
     // cropping/filling never loses detail through an undersized texture.
@@ -537,6 +579,10 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
 
   @override
   Future<void> play() async {
+    if (_hardwareDecodeGuard?.rejected ?? false) {
+      _rejectSoftwareDecode();
+      return;
+    }
     await _player.play();
   }
 
@@ -553,6 +599,7 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
 
   @override
   Future<void> softStop() async {
+    _hardwareDecodeGuard?.suspend();
     // Pausing a live source keeps its demuxer, decoder, audio track and network
     // buffers alive. That left the home/settings UI competing with an invisible
     // room for CPU and hundreds of MiB after navigation. Unload the current
@@ -579,6 +626,7 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
   Future<void> _applyAudioOnly(bool audioOnly, {bool force = false}) async {
     if (_disposed) return;
     if (!force && _isAudioOnly == audioOnly) return;
+    _hardwareDecodeGuard?.suspend();
 
     try {
       if (PlatformUtils.isAndroid) {
@@ -598,8 +646,10 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
       }
 
       _isAudioOnly = audioOnly;
+      _hardwareDecodeGuard?.activate(videoEnabled: !audioOnly);
       if (_disposed) return;
     } catch (error, stackTrace) {
+      _hardwareDecodeGuard?.activate(videoEnabled: !_isAudioOnly);
       throw PlayerException(
         message: 'MediaKit audio mode switch failed',
         type: PlayerErrorType.lifecycle,
@@ -681,6 +731,9 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
     _listenerBound = false;
 
     await _cancelAllSubscriptions();
+
+    await _hardwareDecodeGuard?.dispose();
+    _hardwareDecodeGuard = null;
 
     try {
       await _player.stop();

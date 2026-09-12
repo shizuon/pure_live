@@ -6,6 +6,8 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pure_live/common/global/platform_utils.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/player/adapters/media_kit_adapter.dart';
+import 'package:pure_live/player/models/macos_decode_mode.dart';
+import 'package:pure_live/player/utils/macos_decoder_status.dart';
 
 /// multiview 单格播放器契约。
 ///
@@ -85,6 +87,7 @@ class MultiviewCellPlayer implements MultiviewCellPlayerHandle {
   Player? _player;
 
   VideoController? _controller;
+  MacosHardwareDecodeGuard? _hardwareDecodeGuard;
 
   /// 会话级音量（0.0-1.0）；静音时保持该值，取消静音后生效。
   double _volume = 1.0;
@@ -130,17 +133,28 @@ class MultiviewCellPlayer implements MultiviewCellPlayerHandle {
     // Android/Web 平台忽略 width/height（media_kit 官方语义），无副作用。
     final controller = VideoController(
       player,
-      configuration: VideoControllerConfiguration(
-        enableHardwareAcceleration: PlatformUtils.isMacOS ? false : SettingsService.to.player.enableCodec.v,
-        hwdec: PlatformUtils.isMacOS ? 'no' : null,
-        androidAttachSurfaceAfterVideoParameters: false,
-        width: renderWidth,
-        height: renderHeight,
-      ),
+      configuration: PlatformUtils.isMacOS
+          ? SettingsService.to.player.activeMacosDecodeMode.configuration(width: renderWidth, height: renderHeight)
+          : VideoControllerConfiguration(
+              enableHardwareAcceleration: SettingsService.to.player.enableCodec.v,
+              androidAttachSurfaceAfterVideoParameters: false,
+              width: renderWidth,
+              height: renderHeight,
+            ),
     );
     _controller = controller;
 
+    if (PlatformUtils.isMacOS && SettingsService.to.player.activeMacosDecodeMode == MacosDecodeMode.hardwareOnly) {
+      _hardwareDecodeGuard = MacosHardwareDecodeGuard(
+        native: player.platform,
+        pause: player.pause,
+        onRejected: () => SmartDialog.showToast(i18n('macos_decode_rejected')),
+      );
+      await _hardwareDecodeGuard!.attach();
+    }
+
     await player.open(Media(url, httpHeaders: headers), play: true);
+    _hardwareDecodeGuard?.activate(videoEnabled: true);
   }
 
   @override
@@ -151,6 +165,10 @@ class MultiviewCellPlayer implements MultiviewCellPlayerHandle {
 
   @override
   Future<void> resume() async {
+    if (_hardwareDecodeGuard?.rejected ?? false) {
+      SmartDialog.showToast(i18n('macos_decode_rejected'));
+      return;
+    }
     final player = _player;
     if (player == null) {
       // 恢复必须发生在已起播的实例上；未起播说明调用方状态机有缺陷。
@@ -180,7 +198,9 @@ class MultiviewCellPlayer implements MultiviewCellPlayerHandle {
       // 换流必须发生在已起播的实例上；未起播说明调用方状态机有缺陷。
       throw StateError('MultiviewCellPlayer: open before start');
     }
+    _hardwareDecodeGuard?.suspend();
     await player.open(Media(url, httpHeaders: headers), play: true);
+    _hardwareDecodeGuard?.activate(videoEnabled: true);
   }
 
   @override
@@ -192,11 +212,14 @@ class MultiviewCellPlayer implements MultiviewCellPlayerHandle {
 
   @override
   Future<void> disposePlayer() async {
+    final guard = _hardwareDecodeGuard;
+    _hardwareDecodeGuard = null;
     final player = _player;
     _player = null;
     // 渲染控制器引用一并摘除；其原生清理由 player.dispose 的 release 钩子
     // 全权完成（见接口注释的所有权约定），此处不得直接销毁。
     _controller = null;
+    await guard?.dispose();
     if (player == null) return;
     await player.dispose();
   }

@@ -1,9 +1,9 @@
 {
-  "version": "3.0.19",
-  "build_number": 4107,
-  "version_num": 300194107,
+  "version": "3.0.20",
+  "build_number": 4108,
+  "version_num": 300204108,
   "android_abis": [],
-  "version_desc": "3.0.19 测试版：清理重复设置调度，录制按需启动，B 从最低画质按需解析；保留桌面卡顿、斗鱼弹幕重连和裁剪覆盖修复。",
+  "version_desc": "3.0.20 Mac 测试版：新增软解、硬解 only、硬解兼容三档及 A/B 实际解码状态；修改模式需重启，默认仍为软解。",
   "prerelease": true,
   "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
   "platforms": {
@@ -34,10 +34,10 @@
       "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
     },
     "macos": {
-      "version": "3.0.19",
-      "build_number": 4107,
-      "version_num": 300194107,
-      "version_desc": "3.0.19 测试版：清理重复设置调度，录制按需启动，B 从最低画质按需解析；保留桌面卡顿、斗鱼弹幕重连和裁剪覆盖修复。",
+      "version": "3.0.20",
+      "build_number": 4108,
+      "version_num": 300204108,
+      "version_desc": "3.0.20 Mac 测试版：新增软解、硬解 only、硬解兼容三档及 A/B 实际解码状态；修改模式需重启，默认仍为软解。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },
