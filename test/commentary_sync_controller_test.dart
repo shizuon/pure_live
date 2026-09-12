@@ -381,23 +381,33 @@ void main() {
   }, timeout: const Timeout(Duration(seconds: 45)));
 
   test('exiting during crossfade cannot leave the primary stream muted', () async {
+    final fadeStarted = Completer<void>();
     final primary = _SyncPlayer(position: const Duration(seconds: 30));
     final companion = _SyncPlayer(position: const Duration(seconds: 27));
     final pool = PlayerPool(factory: (_) async => companion);
-    final manager = _PlayerManager(primary: primary, pool: pool);
+    final manager = _PlayerManager(
+      primary: primary,
+      pool: pool,
+      onVolume: (volume) {
+        if (volume < 0.75 && !fadeStarted.isCompleted) fadeStarted.complete();
+      },
+    );
     final controller = CommentarySyncController(
       primaryManager: manager,
       playerPool: pool,
       resolver: const _Resolver(),
       platformSupportProbe: () => true,
     );
+    addTearDown(controller.dispose);
     final activation = controller.activate(
       videoRoom: LiveRoom(roomId: 'video', platform: 'test'),
       audioRoom: LiveRoom(roomId: 'audio', platform: 'test'),
       primaryVolume: 0.75,
     );
 
-    await Future<void>.delayed(const Duration(milliseconds: 2050));
+    // Wait for the actual first fade step. A fixed 2050 ms can expire before
+    // the 2-second stability window has completed on a busy CI worker.
+    await fadeStarted.future;
     await controller.exit();
     await activation;
 
@@ -502,7 +512,7 @@ class _SourceResolver extends StreamSourceResolver {
 }
 
 class _PlayerManager extends PlayerManager {
-  _PlayerManager({required this.primary, required PlayerPool pool})
+  _PlayerManager({required this.primary, required PlayerPool pool, this.onVolume})
     : super(
         fallbackManager: EngineFallbackManager(
           defaultEngine: PlayerEngine.mediaKit,
@@ -515,6 +525,7 @@ class _PlayerManager extends PlayerManager {
       );
 
   final _SyncPlayer primary;
+  final void Function(double)? onVolume;
   double lastVolume = 1;
   bool mutedForReloads = false;
 
@@ -534,6 +545,7 @@ class _PlayerManager extends PlayerManager {
   Future<void> setVolume(double volume) async {
     lastVolume = volume;
     await primary.setVolume(volume);
+    onVolume?.call(volume);
   }
 
   @override
