@@ -253,6 +253,29 @@ jobs:
             --target-platform android-arm64 \
             --dart-define=PURELIVE_BUILD_SOURCE=github-manual
 
+      - name: Verify Android APK contents
+        shell: pwsh
+        run: ./tool/verify_android_apk.ps1 -ApkPath build/app/outputs/flutter-apk/app-arm64-v8a-release.apk -ExpectedAbi arm64-v8a
+
+      - name: Verify Android APK certificate and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$build_tools/apksigner" verify --verbose --print-certs "$apk"
+          "$build_tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/apk-badging.txt"
+          python3 - "$RUNNER_TEMP/apk-badging.txt" <<'PY'
+          import pathlib, re, sys
+          version = re.search(r'^version:\s*(\S+)', pathlib.Path('pubspec.yaml').read_text(), re.M).group(1)
+          name, code = version.split('+')
+          badging = pathlib.Path(sys.argv[1]).read_text()
+          assert "package: name='com.mystyle.purelive'" in badging, 'Wrong package'
+          assert f"versionCode='{code}'" in badging and f"versionName='{name}'" in badging, 'Wrong version'
+          assert "native-code: 'arm64-v8a'" in badging, 'Wrong ABI'
+          print(f'Android package/version verified: {name}+{code}, arm64-v8a')
+          PY
+
       # -----------------------------------------------------
       # Version
       # -----------------------------------------------------
