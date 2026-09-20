@@ -337,6 +337,11 @@ class CommentarySyncController
     if (!isActive || _primarySync == null || _companionSync == null) return;
     final target = CommentarySyncMath.clampOffset(requestedOffsetMs, minimum: minOffsetMs, maximum: maxOffsetMs);
     _requestedOffsetMs = target;
+    // A no-op drain completes before its Future is assigned to _offsetWork,
+    // leaving that completed Future registered forever. Do not start a drain
+    // unless playback needs an adjustment. During a running drain, still queue
+    // the requested target (including zero) so a quick reversal is respected.
+    if (_offsetWork == null && target == _appliedOffsetMs) return;
     state.value = state.value.copyWith(status: CommentarySyncStatus.calibrating, offsetMs: target);
     _cancelBufferRecovery();
     final running = _offsetWork;
