@@ -1,5 +1,9 @@
 import 'package:rxdart/rxdart.dart';
 import 'package:pure_live/common/index.dart';
+import 'package:pure_live/common/global/platform_utils.dart';
+import 'package:pure_live/player/widgets/stable_player_video.dart';
+import 'package:pure_live/modules/live_play/widgets/commentary_touch_calibration.dart';
+import 'package:pure_live/modules/live_play/widgets/commentary_sync_widgets.dart';
 import 'package:pure_live/modules/live_play/states/ui_state.dart';
 import 'package:pure_live/player/core/portrait_stream_support.dart';
 import 'package:pure_live/modules/live_play/controllers/player_state.dart';
@@ -182,6 +186,42 @@ class LivePlayContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!PlatformUtils.isMobile || isInPip) return _buildContent(context);
+    final sync = GlobalPlayerService.instance.commentarySyncController;
+    return Obx(() {
+      final session = sync.state.value;
+      final videoController = controller.state.value.player.videoController;
+      if (session.isEngaged && videoController != null) {
+        if (session.previewVisible) {
+          final manager = GlobalPlayerService.instance.player;
+          manager.videoPresentationRevision.value;
+          final primary = manager.currentPlayer;
+          final commentary = sync.companionPreviewPlayer;
+          return CommentaryTouchCalibration(
+            primary: primary == null
+                ? const SizedBox.shrink()
+                : StablePlayerVideo(key: ObjectKey(primary), player: primary),
+            commentary: commentary == null
+                ? const Center(child: CircularProgressIndicator())
+                : StablePlayerVideo(key: ObjectKey(commentary), player: commentary),
+            primaryLabel: session.videoRoom?.nick ?? '-',
+            commentaryLabel: session.audioRoom?.nick ?? '-',
+            offsetLabel: formatCommentaryOffset(session.offsetMs),
+            ready: session.isActive,
+            onAdjust: sync.adjustOffset,
+            onDone: sync.finishCalibrationPreview,
+            onSettings: () => Get.dialog(CommentarySyncDialog(controller: videoController)),
+          );
+        }
+        if (session.overlayEditing) {
+          return LivePlayVideo(controller: controller, expandToParent: true);
+        }
+      }
+      return _buildContent(context);
+    });
+  }
+
+  Widget _buildContent(BuildContext context) {
     final player = GlobalPlayerService.instance.player;
 
     if (isInPip) {

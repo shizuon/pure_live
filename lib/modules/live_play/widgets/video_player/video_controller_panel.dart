@@ -202,7 +202,8 @@ class _VideoControllerPanelState extends State<VideoControllerPanel> {
                 if (!GlobalPlayerService.instance.commentarySyncController.state.value.overlayEditing) ...[
                   // Playback/unlock controls remain reachable above the crop.
                   LockButton(controller: controller),
-                  if (CommentaryPlatformSupport.isSupported) CommentaryCalibrationPreview(controller: controller),
+                  if (CommentaryPlatformSupport.isSupported && !PlatformUtils.isMobile)
+                    CommentaryCalibrationPreview(controller: controller),
                   if (CommentaryPlatformSupport.isSupported) CommentarySyncBadge(controller: controller),
                   TopActionBar(controller: controller, barHeight: barHeight),
                   BottomActionBar(controller: controller, barHeight: barHeight),

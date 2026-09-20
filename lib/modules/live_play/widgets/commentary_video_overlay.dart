@@ -7,6 +7,11 @@ import 'package:pure_live/modules/live_play/states/commentary_overlay_layout.dar
 import 'package:pure_live/player/interface/unified_player_interface.dart';
 import 'package:pure_live/player/widgets/stable_player_video.dart';
 
+double commentaryTouchTarget(BuildContext context, double desktopSize) => switch (Theme.of(context).platform) {
+  TargetPlatform.android || TargetPlatform.iOS => 48,
+  _ => desktopSize,
+};
+
 /// Shares B's existing player. Preview, crop editor and overlay never render it
 /// simultaneously (important for native video output sizing on Windows/macOS).
 class CommentaryVideoOverlay extends StatelessWidget {
@@ -201,10 +206,10 @@ class _SourceSizedOverlayState extends State<_SourceSizedOverlay> {
                                       widget.sync.state.value.overlayLayout.resize(event.delta.dx, viewport, ratio),
                                     );
                                   },
-                                  child: const SizedBox(
-                                    width: 32,
-                                    height: 32,
-                                    child: ColoredBox(
+                                  child: SizedBox(
+                                    width: commentaryTouchTarget(context, 32),
+                                    height: commentaryTouchTarget(context, 32),
+                                    child: const ColoredBox(
                                       color: Colors.black54,
                                       child: Icon(Icons.open_in_full, color: Colors.white, size: 18),
                                     ),
@@ -265,84 +270,87 @@ class _CropEditorState extends State<_CropEditor> {
               child: AspectRatio(
                 aspectRatio: widget.aspectRatio,
                 child: LayoutBuilder(
-                  builder: (context, constraints) => GestureDetector(
-                    key: const ValueKey('commentary-crop-selection'),
-                    behavior: HitTestBehavior.opaque,
-                    dragStartBehavior: DragStartBehavior.down,
-                    onPanStart: widget.ready ? (event) => start = event.localPosition : null,
-                    onPanUpdate: widget.ready
-                        ? (event) {
-                            final origin = start;
-                            if (origin != null) {
-                              setState(() {
-                                crop = CommentaryOverlayLayout.selection(
-                                  origin,
-                                  event.localPosition,
-                                  constraints.biggest,
-                                );
-                              });
-                            }
-                          }
-                        : null,
-                    onPanEnd: (_) => setState(() => start = null),
-                    onPanCancel: () => setState(() => start = null),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        IgnorePointer(child: widget.video),
-                        IgnorePointer(child: CustomPaint(painter: _CropPainter(crop))),
-                        if (widget.ready && start == null && CommentaryOverlayLayout.validCrop(crop))
-                          for (final handle in CropHandle.values)
-                            Positioned(
-                              left: ((crop.left + crop.width * handle.position.dx) * constraints.maxWidth - 14).clamp(
-                                0.0,
-                                constraints.maxWidth - 28,
-                              ),
-                              top: ((crop.top + crop.height * handle.position.dy) * constraints.maxHeight - 14).clamp(
-                                0.0,
-                                constraints.maxHeight - 28,
-                              ),
-                              child: GestureDetector(
-                                key: ValueKey('commentary-crop-handle-${handle.name}'),
-                                behavior: HitTestBehavior.opaque,
-                                dragStartBehavior: DragStartBehavior.down,
-                                onPanUpdate: (event) => setState(() {
-                                  crop = CommentaryOverlayLayout.adjustCrop(
-                                    crop,
-                                    handle,
-                                    Offset(
-                                      event.delta.dx / constraints.maxWidth,
-                                      event.delta.dy / constraints.maxHeight,
-                                    ),
+                  builder: (context, constraints) {
+                    final targetSize = commentaryTouchTarget(context, 28).clamp(0.0, constraints.biggest.shortestSide);
+                    return GestureDetector(
+                      key: const ValueKey('commentary-crop-selection'),
+                      behavior: HitTestBehavior.opaque,
+                      dragStartBehavior: DragStartBehavior.down,
+                      onPanStart: widget.ready ? (event) => start = event.localPosition : null,
+                      onPanUpdate: widget.ready
+                          ? (event) {
+                              final origin = start;
+                              if (origin != null) {
+                                setState(() {
+                                  crop = CommentaryOverlayLayout.selection(
+                                    origin,
+                                    event.localPosition,
+                                    constraints.biggest,
                                   );
-                                }),
-                                child: SizedBox(
-                                  width: 28,
-                                  height: 28,
-                                  child: Center(
-                                    child: Container(
-                                      width: handle == CropHandle.center ? 20 : 12,
-                                      height: handle == CropHandle.center ? 20 : 12,
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue,
-                                        border: Border.all(color: Colors.white, width: 2),
-                                        shape: BoxShape.circle,
+                                });
+                              }
+                            }
+                          : null,
+                      onPanEnd: (_) => setState(() => start = null),
+                      onPanCancel: () => setState(() => start = null),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          IgnorePointer(child: widget.video),
+                          IgnorePointer(child: CustomPaint(painter: _CropPainter(crop))),
+                          if (widget.ready && start == null && CommentaryOverlayLayout.validCrop(crop))
+                            for (final handle in CropHandle.values)
+                              Positioned(
+                                left:
+                                    ((crop.left + crop.width * handle.position.dx) * constraints.maxWidth -
+                                            targetSize / 2)
+                                        .clamp(0.0, constraints.maxWidth - targetSize),
+                                top:
+                                    ((crop.top + crop.height * handle.position.dy) * constraints.maxHeight -
+                                            targetSize / 2)
+                                        .clamp(0.0, constraints.maxHeight - targetSize),
+                                child: GestureDetector(
+                                  key: ValueKey('commentary-crop-handle-${handle.name}'),
+                                  behavior: HitTestBehavior.opaque,
+                                  dragStartBehavior: DragStartBehavior.down,
+                                  onPanUpdate: (event) => setState(() {
+                                    crop = CommentaryOverlayLayout.adjustCrop(
+                                      crop,
+                                      handle,
+                                      Offset(
+                                        event.delta.dx / constraints.maxWidth,
+                                        event.delta.dy / constraints.maxHeight,
                                       ),
-                                      child: handle == CropHandle.center
-                                          ? const Icon(Icons.open_with, size: 14, color: Colors.white)
-                                          : null,
+                                    );
+                                  }),
+                                  child: SizedBox(
+                                    width: targetSize,
+                                    height: targetSize,
+                                    child: Center(
+                                      child: Container(
+                                        width: handle == CropHandle.center ? 20 : 12,
+                                        height: handle == CropHandle.center ? 20 : 12,
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue,
+                                          border: Border.all(color: Colors.white, width: 2),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: handle == CropHandle.center
+                                            ? const Icon(Icons.open_with, size: 14, color: Colors.white)
+                                            : null,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
+                          if (!widget.ready)
+                            const Center(
+                              child: Text('等待 B 视频尺寸…', style: TextStyle(color: Colors.white)),
                             ),
-                        if (!widget.ready)
-                          const Center(
-                            child: Text('等待 B 视频尺寸…', style: TextStyle(color: Colors.white)),
-                          ),
-                      ],
-                    ),
-                  ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
             ),

@@ -1,4 +1,5 @@
 import 'package:pure_live/common/index.dart';
+import 'package:pure_live/common/global/platform_utils.dart';
 import 'package:pure_live/modules/live_play/widgets/keyboard/video_keyboard.dart';
 import 'package:pure_live/modules/live_play/widgets/layout/live_play_back_scope.dart';
 import 'package:pure_live/modules/live_play/widgets/layout/live_play_content.dart';
@@ -19,9 +20,18 @@ class LivePlayPage extends GetView<LivePlayController> {
       final mode = state.ui.screenMode;
       final videoController = state.player.videoController;
       final globalState = GlobalPlayerState.to;
+      final commentary = GlobalPlayerService.instance.commentarySyncController;
+      final commentaryState = commentary.state.value;
+      final commentaryPresentation =
+          PlatformUtils.isMobile &&
+          commentaryState.isEngaged &&
+          (commentaryState.previewVisible || commentaryState.overlayEditing);
       final presentationActive =
           !isInPip &&
-          (mode != VideoMode.normal || globalState.isFullscreen.value || globalState.isWindowFullscreen.value);
+          (commentaryPresentation ||
+              mode != VideoMode.normal ||
+              globalState.isFullscreen.value ||
+              globalState.isWindowFullscreen.value);
 
       final child = LivePlayContent(controller: controller, isInPip: isInPip, mode: mode);
 
@@ -36,7 +46,17 @@ class LivePlayPage extends GetView<LivePlayController> {
 
       return LivePlayBackScope(
         presentationActive: presentationActive,
-        onExitPresentation: controller.exitPresentationForSystemBack,
+        onExitPresentation: () async {
+          if (commentaryPresentation) {
+            if (commentary.state.value.overlayEditing) {
+              await commentary.cancelOverlayCrop();
+            } else {
+              await commentary.finishCalibrationPreview();
+            }
+            return;
+          }
+          await controller.exitPresentationForSystemBack();
+        },
         child: page,
       );
     });

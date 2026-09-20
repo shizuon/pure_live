@@ -23,6 +23,37 @@ import 'package:pure_live/player/models/player_state.dart';
 import 'package:rxdart/rxdart.dart' show BehaviorSubject;
 
 void main() {
+  testWidgets('mobile crop handles remain reachable after rotation and confirm keeps the selection', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final sync = _OverlayController(const _PreviewPlayer());
+    sync.state.value = const CommentarySyncState(status: CommentarySyncStatus.active, overlayEditing: true);
+    for (final size in const [Size(320, 568), Size(568, 320)]) {
+      tester.view.physicalSize = size;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.iOS),
+          home: Stack(
+            children: [
+              CommentaryVideoOverlay(sync: sync, controlsVisible: true, controlsLocked: false, onInteraction: () {}),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final handle = find.byKey(const ValueKey('commentary-crop-handle-center'));
+      expect(tester.getSize(handle), const Size(48, 48));
+      expect((Offset.zero & size).contains(tester.getCenter(handle)), isTrue);
+    }
+    await tester.tap(find.text('覆盖到 A 画面'));
+    await tester.pumpAndSettle();
+    expect(sync.state.value.overlayEnabled, isTrue);
+    expect(find.byKey(const ValueKey('test-companion-video')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   test(
     'rapid offsets and native pause buffering do not reopen B; cropping keeps calibration and video track',
     () async {
