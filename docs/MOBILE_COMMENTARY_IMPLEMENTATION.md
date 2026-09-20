@@ -51,8 +51,8 @@ Android 兼容模式的 `mediacodec` 配置现在只在 Android 生效，防止�
 
 1. Android/iOS 前台、后台、锁屏与原生 Surface/PiP 的实机验收；代码入口已开放实验测试，不等同于设备验收完成。
 2. iOS 原生 PiP 按研究中的独立验证阶段处理，目前没有实现，不在本次测试包内宣称支持。
-3. 云端全量质量门禁、原生编译和实际平台兼容检查。
-4. 后续 GitHub Android/iOS 分阶段测试包；用户已选择自行签名安装，iOS 提供普通未签名 IPA。
+3. 实机兼容性、长时间漂移与资源占用验收；云端质量门和三平台候选编译已完成，不能替代设备证据。
+4. iOS 用户自行签名与安装后的运行反馈；普通未签名 IPA 已交付并完成下载后验证。
 
 回滚以独立基础改动为单位：直播恢复、引擎约束、系统音频、后续移动界面分别检查；不回滚已经稳定的 Mac 三档解码。用户自有未跟踪 README 副本和 Podfile.lock 不纳入本轮提交。
 
@@ -89,13 +89,15 @@ Android 仓库目前未配置正式签名 Secrets。本轮显式选择 `android_
 ## 云端交付记录
 
 - Mac `3.0.21+4109`：冻结提交 `57d507e2c7cfdd5aaa90b037830ffa93824835ee`，[运行 35515581371](https://github.com/shizuon/pure_live/actions/runs/35515581371) 成功。完整质量门、原生编译、应用/ZIP/DMG 校验和上传均通过；`hdiutil verify` 明确返回 VALID。[附件 pure-live-macos](https://github.com/shizuon/pure_live/actions/runs/35515581371/artifacts/10607481324)，222269219 字节，GitHub 上传归档 SHA256 为 `4c9bccfd997422a4b1ab6d7b18b7347cd5f6dddeb8776f987ed0ab6b92b4e2ae`。本机下载遇到 TLS/连接重置，下载后复核尚未完成；云端检查不代替用户实际播放测试。
-- Android `3.0.22+4110`：冻结提交 `ea80da9c9e947c52a057a61da4a5b8b18112bceb`，[运行 35517965163](https://github.com/shizuon/pure_live/actions/runs/35517965163) 完整质量门成功，Android 原生构建运行中。打包后增加既有 `verify_android_apk.ps1` 检查资源和关键库，并检查签名、包名、版本与 ABI；未取得产物前不记为交付完成。
-- iOS：等待 Android 阶段完成，随后使用同一最终业务源码串行构建普通未签名 IPA。尚无本轮原生编译或安装成功证据。
+- Android 首轮：冻结提交 `ea80da9c9e947c52a057a61da4a5b8b18112bceb`，[运行 35517965163](https://github.com/shizuon/pure_live/actions/runs/35517965163) 完整质量门成功，打包校验脚本误报版本；修复与最终产物见下文。
+- iOS 与 Android 最终候选均已生成，见下文；尚无用户设备安装和播放成功证据。
 
 Android 首轮后续结果：原生 APK 编译成功，内容检查及 APK v2 签名验证成功；新加的 manifest 校验把 Flutter build `4110` 误当成 split arm64 的 Android versionCode，因此报 `Wrong version`。Flutter 3.47 的 ABI 规则为 arm64 `2 × 1000 + build`，正确值是 `6110`。来源为本轮 CI 脚本回归，应用源码没有版本错误。修正校验器，并覆盖正确 split 值、错误 build/版本/包名/混合 ABI 的回归测试；打包校验 Python 共 5 项通过。后续仅重试打包，复用首轮已通过的静态检查与 528 项 Flutter 测试，不修改应用源码或重复执行全量门禁。
 
-### Android 重试成功与 iOS 启动
+### Android 与 iOS 最终候选
 
 - Android [运行 35519164786](https://github.com/shizuon/pure_live/actions/runs/35519164786) 全部成功，提交 `a7e064a8f7aed3cc5bd254db5b84246a72094229`。[测试包附件](https://github.com/shizuon/pure_live/actions/runs/35519164786/artifacts/10607124415) 已上传；包内 1259 项 Flutter 资源、15247346 字节，arm64 原生库、APK v2 签名、包名和 `3.0.22 / versionCode 6110` 均通过云端验证。
-- `PureLive-3.0.22-4110-android-arm64-v8a-test-signed.apk` 的云端 SHA256：`60e87c4fdd14f889396e36fc2141517204809aeaf4fce7f36f61284b1162e903`。测试证书 SHA256：`d18d987cee8062a27c0da20d37b95aa0d44a2623b40d2a1b9b51dc0448099769`。本机附件下载仍受连接重置影响，尚未完成下载后复核；不据此否定已经成功的云端校验，也不声称实机播放通过。
-- Android 完全结束后，在同一业务提交启动 iOS [运行 35519995189](https://github.com/shizuon/pure_live/actions/runs/35519995189)。仅打包 iOS，复用首轮完整质量门；交付目标为 `pure-live-ios-self-sign` 中的普通未签名 IPA，不创建正式 Release。
+- `PureLive-3.0.22-4110-android-arm64-v8a-test-signed.apk` 的 SHA256：`60e87c4fdd14f889396e36fc2141517204809aeaf4fce7f36f61284b1162e903`。测试证书 SHA256：`d18d987cee8062a27c0da20d37b95aa0d44a2623b40d2a1b9b51dc0448099769`。本机下载后 `shasum -c` 与 `unzip -tq` 均通过。
+- Android 完全结束后，同一提交的 iOS [运行 35519995189](https://github.com/shizuon/pure_live/actions/runs/35519995189) 全部成功。[普通未签名 IPA 附件](https://github.com/shizuon/pure_live/actions/runs/35519995189/artifacts/10608123252) 已上传；未创建正式 Release。
+- `PureLive-3.0.22-4110-ios-arm64-unsigned.ipa` SHA256：`9589e9ea278a8aa2895610d22aa015122be6f37e7690b80f5dec7a045eda7863`。本机下载后哈希与 `verify_unsigned_ipa.py` 通过，确认 iPhoneOS、主程序和 Flutter/AOT arm64、版本 `3.0.22 (4110)`、资源完整；主应用和分享扩展的 `MinimumOSVersion` 均为 `15.6`。IPA 仍需用户自行签名，尚未在设备安装或运行。
+- 使用步骤见 [移动端测试说明](MOBILE_COMMENTARY_TEST_GUIDE.md)。实机问题继续按反馈修复；编译和假播放器测试不证明 30 分钟漂移、发热、来电/蓝牙和锁屏恢复已达标。
