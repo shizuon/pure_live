@@ -93,3 +93,9 @@ Android 仓库目前未配置正式签名 Secrets。本轮显式选择 `android_
 - iOS：等待 Android 阶段完成，随后使用同一最终业务源码串行构建普通未签名 IPA。尚无本轮原生编译或安装成功证据。
 
 Android 首轮后续结果：原生 APK 编译成功，内容检查及 APK v2 签名验证成功；新加的 manifest 校验把 Flutter build `4110` 误当成 split arm64 的 Android versionCode，因此报 `Wrong version`。Flutter 3.47 的 ABI 规则为 arm64 `2 × 1000 + build`，正确值是 `6110`。来源为本轮 CI 脚本回归，应用源码没有版本错误。修正校验器，并覆盖正确 split 值、错误 build/版本/包名/混合 ABI 的回归测试；打包校验 Python 共 5 项通过。后续仅重试打包，复用首轮已通过的静态检查与 528 项 Flutter 测试，不修改应用源码或重复执行全量门禁。
+
+### Android 重试成功与 iOS 启动
+
+- Android [运行 35519164786](https://github.com/shizuon/pure_live/actions/runs/35519164786) 全部成功，提交 `a7e064a8f7aed3cc5bd254db5b84246a72094229`。[测试包附件](https://github.com/shizuon/pure_live/actions/runs/35519164786/artifacts/10607124415) 已上传；包内 1259 项 Flutter 资源、15247346 字节，arm64 原生库、APK v2 签名、包名和 `3.0.22 / versionCode 6110` 均通过云端验证。
+- `PureLive-3.0.22-4110-android-arm64-v8a-test-signed.apk` 的云端 SHA256：`60e87c4fdd14f889396e36fc2141517204809aeaf4fce7f36f61284b1162e903`。测试证书 SHA256：`d18d987cee8062a27c0da20d37b95aa0d44a2623b40d2a1b9b51dc0448099769`。本机附件下载仍受连接重置影响，尚未完成下载后复核；不据此否定已经成功的云端校验，也不声称实机播放通过。
+- Android 完全结束后，在同一业务提交启动 iOS [运行 35519995189](https://github.com/shizuon/pure_live/actions/runs/35519995189)。仅打包 iOS，复用首轮完整质量门；交付目标为 `pure-live-ios-self-sign` 中的普通未签名 IPA，不创建正式 Release。
