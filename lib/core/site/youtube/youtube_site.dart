@@ -73,7 +73,9 @@ class YouTubeSite extends LiveSite implements LiveSiteRoomRefresher, LiveSiteRec
   @override
   Future<List<LiveRoom>> searchRooms(String keyword, {int page = 1, int pageSize = 30}) async {
     final target = roomIdentity(keyword);
-    if (target != null) return page == 1 ? [await getRoomDetail(roomId: target, platform: id)] : [];
+    final explicitRoom =
+        keyword.contains('://') || keyword.trim().startsWith('@') || keyword.trim().startsWith('channel/');
+    if (target != null && explicitRoom) return page == 1 ? [await getRoomDetail(roomId: target, platform: id)] : [];
     _YouTubeSearch? session = _searches[keyword];
     if (page == 1 || session == null) {
       final html = await this.page('/results', query: {'search_query': keyword, 'sp': 'EgJAAQ=='});

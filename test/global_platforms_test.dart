@@ -182,6 +182,14 @@ void main() {
     expect((await site.searchRooms('news', pageSize: 1)).single.roomId, 'first');
   });
 
+  test('eleven-character search terms are not mistaken for YouTube video IDs', () async {
+    final site = FixtureYouTube()
+      ..html =
+          'ytcfg.set({"INNERTUBE_CONTEXT":{"client":{}}});'
+          'var ytInitialData = {"contents":[]};</script>';
+    expect(await site.searchRooms('livestreams'), isEmpty);
+  });
+
   test('Kick config failures retry every 15 seconds and stop releases retry timer', () {
     fakeAsync((async) {
       final chat = FixtureKickChat();
