@@ -48,13 +48,25 @@ void main() {
       );
       // A no-op reset must not leave a completed task registered as in flight.
       await controller.resetOffset();
+      await controller.pause();
+      await controller.adjustOffset(100);
+      expect(controller.state.value.offsetMs, 100);
+      await controller.resetOffset();
+      expect(controller.state.value.offsetMs, 0, reason: 'cancel a not-yet-applied offset while paused');
+      await controller.play();
+      final initialCompanionPauses = companion.pauseCount;
+      final initialPrimaryPauses = primary.pauseCount;
       await Future.wait(List.generate(8, (_) => controller.adjustOffset(500)));
       expect(controller.state.value.offsetMs, 4000);
-      expect(companion.pauseCount, greaterThan(0), reason: 'apply the offset to playback, not just the label');
+      expect(
+        companion.pauseCount,
+        greaterThan(initialCompanionPauses),
+        reason: 'apply the offset to playback, not just the label',
+      );
       expect(controller.isActive, isTrue);
       await Future.wait(List.generate(5, (_) => controller.adjustOffset(-100)));
       expect(controller.state.value.offsetMs, 3500);
-      expect(primary.pauseCount, greaterThan(0));
+      expect(primary.pauseCount, greaterThan(initialPrimaryPauses));
       await controller.finishCalibrationPreview();
       await controller.beginOverlayCrop();
       await controller.confirmOverlayCrop(const Rect.fromLTWH(.6, .5, .3, .4));

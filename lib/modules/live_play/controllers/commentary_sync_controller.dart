@@ -341,7 +341,10 @@ class CommentarySyncController
     // leaving that completed Future registered forever. Do not start a drain
     // unless playback needs an adjustment. During a running drain, still queue
     // the requested target (including zero) so a quick reversal is respected.
-    if (_offsetWork == null && target == _appliedOffsetMs) return;
+    if (_offsetWork == null && target == _appliedOffsetMs) {
+      state.value = state.value.copyWith(status: CommentarySyncStatus.active, offsetMs: target, clearMessage: true);
+      return;
+    }
     state.value = state.value.copyWith(status: CommentarySyncStatus.calibrating, offsetMs: target);
     _cancelBufferRecovery();
     final running = _offsetWork;
