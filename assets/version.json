@@ -1,20 +1,20 @@
 {
-  "version": "3.0.21",
-  "build_number": 4109,
-  "version_num": 300214109,
-  "android_abis": [],
-  "version_desc": "3.0.21 Mac 测试版：连续校准与裁剪保持 B 播放时间线，默认高清并可选 B 画质；加入直播地址恢复与双流音频会话基础，保留三档解码。",
+  "version": "3.0.22",
+  "build_number": 4110,
+  "version_num": 300224110,
+  "android_abis": ["arm64-v8a"],
+  "version_desc": "3.0.22 移动端候选：Android/iOS 双流触摸校准、高清 B 选档、裁剪覆盖、后台会话控制和 Android PiP 覆盖。尚待实机验证。",
   "prerelease": true,
   "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
   "platforms": {
     "android": {
-      "version": "3.0.15",
-      "build_number": 4103,
-      "version_num": 300154103,
-      "version_desc": "本轮未发布 Android 安装包",
-      "prerelease": false,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15",
-      "android_abis": []
+      "version": "3.0.22",
+      "build_number": 4110,
+      "version_num": 300224110,
+      "version_desc": "Android 双流迁移候选，APK 以 Actions 实际产物为准；尚待实机验证。",
+      "prerelease": true,
+      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
+      "android_abis": ["arm64-v8a"]
     },
     "windows": {
       "version": "3.0.19",
@@ -42,12 +42,12 @@
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },
     "ios": {
-      "version": "3.0.15",
-      "build_number": 4103,
-      "version_num": 300154103,
-      "version_desc": "本轮未发布 iOS 安装包",
-      "prerelease": false,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
+      "version": "3.0.22",
+      "build_number": 4110,
+      "version_num": 300224110,
+      "version_desc": "iOS/iPadOS 双流迁移候选；提供普通未签名 IPA 供自行签名安装，尚待实机验证。",
+      "prerelease": true,
+      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     }
   }
 }

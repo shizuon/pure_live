@@ -70,10 +70,11 @@ void main() {
     expect(formatCommentaryOffset(1010), '+1.01s');
   });
 
-  test('migration allow-list includes macOS, Windows and iOS only', () {
+  test('migration allow-list includes Android and iOS alongside desktop targets', () {
     expect(CommentaryPlatformSupport.supports(macOS: true, windows: false, iOS: false), isTrue);
     expect(CommentaryPlatformSupport.supports(macOS: false, windows: true, iOS: false), isTrue);
     expect(CommentaryPlatformSupport.supports(macOS: false, windows: false, iOS: true), isTrue);
+    expect(CommentaryPlatformSupport.supports(macOS: false, windows: false, iOS: false, android: true), isTrue);
     expect(CommentaryPlatformSupport.supports(macOS: false, windows: false, iOS: false), isFalse);
   });
 

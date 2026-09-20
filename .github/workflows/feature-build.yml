@@ -9,6 +9,12 @@ on:
         type: boolean
         default: false
 
+      android_test_signing:
+        description: Use ephemeral debug certificate for Android testing only (cannot publish Release)
+        required: true
+        type: boolean
+        default: false
+
       build_windows:
         description: Build Windows EXE and MSIX
         required: true
@@ -28,7 +34,7 @@ on:
         default: false
 
       build_ios:
-        description: Build unsigned iOS app and TrollStore IPA
+        description: Build unsigned iOS IPA for self-signing, app archive and TrollStore IPA
         required: true
         type: boolean
         default: false
@@ -49,7 +55,7 @@ on:
         description: Release tag (e.g. v1.0.0) – required if create_release is true
         required: true
         type: string
-        default: 'v3.0.21'
+        default: 'v3.0.22'
 
   push:
     tags:
@@ -135,6 +141,9 @@ jobs:
       - name: Test
         run: flutter test --concurrency=12
 
+      - name: Test unsigned IPA verification
+        run: python3 -m unittest discover -s test -p verify_unsigned_ipa_test.py
+
       - name: Test native mailbox frame delivery
         shell: bash
         run: |
@@ -191,6 +200,17 @@ jobs:
           KEY_ALIAS: ${{ secrets.PURELIVE_KEY_ALIAS }}
         run: |
           set -euo pipefail
+
+          if [[ "${{ inputs.android_test_signing }}" == "true" ]]; then
+            if [[ "${{ inputs.create_release }}" == "true" ]]; then
+              echo "Test-signed APKs cannot be published as a Release."
+              exit 1
+            fi
+            echo "APK_SIGNING_LABEL=test-signed" >> "$GITHUB_ENV"
+            echo "Test-only build: Gradle will use this runner's ephemeral debug certificate."
+            exit 0
+          fi
+          echo "APK_SIGNING_LABEL=release" >> "$GITHUB_ENV"
 
           if [[ -z "$KEYSTORE_BASE64" ||
                 -z "$STORE_PASSWORD" ||
@@ -267,7 +287,7 @@ jobs:
 
           cp \
             "$APK_DIR/app-arm64-v8a-release.apk" \
-            "PureLive-${VERSION}-android-arm64-v8a-release.apk"
+            "PureLive-${VERSION}-android-arm64-v8a-${APK_SIGNING_LABEL}.apk"
 
 
       # -----------------------------------------------------
@@ -279,14 +299,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          for file in PureLive-*-android-arm64-v8a-release.apk
+          for file in PureLive-*-android-arm64-v8a-*.apk
           do
             sha256sum "$file" > "$file.sha256"
           done
 
           echo "=== Android checksums ==="
 
-          cat PureLive-*-android-arm64-v8a-release.apk.sha256
+          cat PureLive-*-android-arm64-v8a-*.apk.sha256
 
       # -----------------------------------------------------
       # Upload
@@ -297,8 +317,8 @@ jobs:
         with:
           name: pure-live-android
           path: |
-            PureLive-*-android-arm64-v8a-release.apk
-            PureLive-*-android-arm64-v8a-release.apk.sha256
+            PureLive-*-android-arm64-v8a-*.apk
+            PureLive-*-android-arm64-v8a-*.apk.sha256
           if-no-files-found: error
           retention-days: 3
 
@@ -1246,6 +1266,33 @@ jobs:
       # -----------------------------------------------------
       # TrollStore entitlements
       # -----------------------------------------------------
+
+      - name: Package and verify unsigned IPA for self-signing
+        if: ${{ github.event_name == 'push' || inputs.build_ios }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.artifact_version }}"
+          APP="${{ steps.ios_app.outputs.app_path }}"
+          staging="$(mktemp -d "$RUNNER_TEMP/ios-unsigned-XXXXXX")"
+          mkdir -p "$staging/Payload"
+          ditto "$APP" "$staging/Payload/Runner.app"
+          # Package before the later ad-hoc/TrollStore signing step mutates APP.
+          ditto -c -k --keepParent "$staging/Payload" "PureLive-${VERSION}-ios-arm64-unsigned.ipa"
+          unzip -tq "PureLive-${VERSION}-ios-arm64-unsigned.ipa"
+          python3 tool/verify_unsigned_ipa.py "PureLive-${VERSION}-ios-arm64-unsigned.ipa"
+          sha256sum "PureLive-${VERSION}-ios-arm64-unsigned.ipa" > "PureLive-${VERSION}-ios-arm64-unsigned.ipa.sha256"
+
+      - name: Upload self-signing IPA
+        if: ${{ github.event_name == 'push' || inputs.build_ios }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pure-live-ios-self-sign
+          path: |
+            PureLive-*-ios-arm64-unsigned.ipa
+            PureLive-*-ios-arm64-unsigned.ipa.sha256
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Create TrollStore entitlements
         if: ${{ github.event_name == 'push' || inputs.build_ios }}

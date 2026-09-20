@@ -86,6 +86,57 @@ class CommentarySyncController
   late final Worker _sessionStateWorker;
   int _transportRevision = 0;
   int _volumeRevision = 0;
+  int _mobileSessionId = 0;
+  int get mobileSessionId => _mobileSessionId;
+  bool _mobileVideoVisible = true;
+  bool _mobileVideoTransition = false;
+  UnifiedPlayer? _backgroundPrimary;
+  Future<void> _mobileVideoTail = Future.value();
+
+  /// Called only by the mobile lifecycle owner. UI preview/crop changes never
+  /// take this path, so hiding calibration keeps its foreground timeline.
+  Future<void> setMobileVideoVisible(bool visible) {
+    if (!isEngaged || _manualStop) return Future.value();
+    _mobileVideoVisible = visible;
+    final session = _mobileSessionId;
+    final work = _mobileVideoTail.then((_) async {
+      if (session != _mobileSessionId || _manualStop) return;
+      await _applyMobileVideoVisible(visible);
+    });
+    _mobileVideoTail = work.then<void>((_) {}, onError: (_, _) {});
+    return work;
+  }
+
+  Future<void> _applyMobileVideoVisible(bool visible) async {
+    _mobileVideoTransition = true;
+    final generation = _generation;
+    final primary = primaryManager.currentPlayer;
+    _driftTimer?.cancel();
+    _cancelBufferRecovery();
+    try {
+      await _setCompanionRate(1);
+      if (primary != null && (!visible || identical(primary, _backgroundPrimary))) {
+        await primary.setAudioOnly(!visible).timeout(const Duration(seconds: 5));
+        _backgroundPrimary = visible ? null : primary;
+      }
+      if (generation != _generation || _manualStop) return;
+      await _setCompanionVideoEnabled(visible);
+      if (visible && generation == _generation && isActive) {
+        // Track restoration can alter native timestamps. Preserve the current
+        // content relation without pausing either stream a second time.
+        _baselineGapMs =
+            ((_companionSync?.currentPosition ?? Duration.zero) - (_primarySync?.currentPosition ?? Duration.zero))
+                    .inMicroseconds /
+                1000 +
+            _appliedOffsetMs;
+        _consecutiveDriftSamples = 0;
+        state.value = state.value.copyWith(message: '已从后台恢复；可再次核对同步');
+        _startDriftMonitor();
+      }
+    } finally {
+      _mobileVideoTransition = false;
+    }
+  }
 
   @override
   int get transportRevision => _transportRevision;
@@ -124,6 +175,7 @@ class CommentarySyncController
       throw StateError('Video and commentary rooms must be different');
     }
     await exit();
+    _mobileSessionId++;
     _transportRevision++;
     _volumeRevision++;
     final generation = ++_generation;
@@ -191,6 +243,7 @@ class CommentarySyncController
         if (!await _waitForAudioTrack()) {
           throw StateError('No audio track in commentary stream');
         }
+        if (!_mobileVideoVisible) await _setCompanionVideoEnabled(false);
         state.value = state.value.copyWith(
           qualityId: candidate.quality.selectionId.toString(),
           qualityLabel: candidate.quality.quality,
@@ -483,11 +536,12 @@ class CommentarySyncController
     // Serialize rapid preview/overlay toggles; never drop the last requested mode.
     _videoTransitionTail = _videoTransitionTail.then((_) async {
       if (companion == null || companion != _companion || generation != _generation) return;
-      if (_companionVideoEnabled == enabled) return;
+      final target = enabled && _mobileVideoVisible;
+      if (_companionVideoEnabled == target) return;
       _previewTrackChanging = true;
       try {
-        await companion.setAudioOnly(!enabled).timeout(const Duration(seconds: 5));
-        _companionVideoEnabled = enabled;
+        await companion.setAudioOnly(!target).timeout(const Duration(seconds: 5));
+        _companionVideoEnabled = target;
       } catch (_) {
         if (generation == _generation) {
           state.value = state.value.copyWith(message: 'B 画面切换失败，可重试或更换解说源；声音保持不变');
@@ -558,11 +612,14 @@ class CommentarySyncController
     final target = _requestedOffsetMs;
     _appliedOffsetMs = 0;
     if (target != 0) await setOffset(target);
+    if (!_mobileVideoVisible) await setMobileVideoVisible(false);
     _startDriftMonitor();
   }
 
   void _handlePrimaryLoading(bool loading) {
-    if (!isActive || _primaryReloading || _offsetWork != null || _transportPausedByUser) return;
+    if (!isActive || _primaryReloading || _offsetWork != null || _transportPausedByUser || _mobileVideoTransition) {
+      return;
+    }
     if (loading) {
       _primaryWasBuffering = true;
       _consecutiveDriftSamples = 0;
@@ -603,7 +660,13 @@ class CommentarySyncController
   Future<void> _correctDrift() async {
     final video = _primarySync;
     final audio = _companionSync;
-    if (!isActive || _primaryReloading || _offsetWork != null || video == null || audio == null) {
+    if (!isActive ||
+        !_mobileVideoVisible ||
+        _mobileVideoTransition ||
+        _primaryReloading ||
+        _offsetWork != null ||
+        video == null ||
+        audio == null) {
       return;
     }
     if (video.isBufferingNow || audio.isBufferingNow || !_companion!.isPlayingNow || !primaryManager.isPlayingNow) {
@@ -845,6 +908,7 @@ class CommentarySyncController
   }
 
   Future<void> _exit({required bool restorePrimary}) async {
+    _mobileSessionId++;
     _transportRevision++;
     _volumeRevision++;
     _manualStop = true;
@@ -855,6 +919,17 @@ class CommentarySyncController
     _driftTimer = null;
     _cancelBufferRecovery();
     _cancelOffsetDelay();
+    await _mobileVideoTail;
+    final backgroundPrimary = _backgroundPrimary;
+    _backgroundPrimary = null;
+    _mobileVideoVisible = true;
+    if (restorePrimary && identical(backgroundPrimary, primaryManager.currentPlayer) && backgroundPrimary != null) {
+      try {
+        await backgroundPrimary.setAudioOnly(false).timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // Continue releasing B even if a native restore fails during exit.
+      }
+    }
     state.value = state.value.copyWith(overlayEnabled: false, overlayEditing: false, previewVisible: false);
     if (restorePrimary && state.value.isEngaged) await _restorePrimaryAudio();
     await _disposeCompanion();

@@ -125,6 +125,17 @@ class PlayerManager {
   /// dual-stream coordinator without making primary player methods recurse.
   LiveAudioControlDelegate? controlDelegate;
 
+  /// Injected by the session owner; compact surfaces reuse the existing B
+  /// texture rather than opening another stream or a second crop editor.
+  Widget Function()? compactCommentaryBuilder;
+
+  Stream<bool> get sessionPlayingStream => controlDelegate is LiveAudioSessionState
+      ? (controlDelegate as LiveAudioSessionState).sessionPlayingStream
+      : onPlaying;
+  bool get sessionPlaying => controlDelegate is LiveAudioSessionState
+      ? (controlDelegate as LiveAudioSessionState).sessionPlaying
+      : isPlayingNow;
+
   final RxBool isInitialized = false.obs;
   final RxBool hasError = false.obs;
   final RxBool isVerticalVideo = false.obs;
@@ -1162,6 +1173,8 @@ class PlayerManager {
                   ),
                 ),
                 Positioned.fill(child: _buildCompactDanmaku()),
+                if (compactCommentaryBuilder != null)
+                  Obx(() => isFloatingVideoVisible.value ? compactCommentaryBuilder!() : const SizedBox.shrink()),
                 Positioned.fill(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
@@ -1181,8 +1194,8 @@ class PlayerManager {
                     child: IgnorePointer(
                       ignoring: !isHovered.value,
                       child: StreamBuilder<bool>(
-                        stream: onPlaying,
-                        initialData: isPlayingNow,
+                        stream: sessionPlayingStream,
+                        initialData: sessionPlaying,
                         builder: (context, snapshot) {
                           var isPlay = snapshot.data ?? true;
                           return IconButton(
@@ -1325,7 +1338,7 @@ class PlayerManager {
             children: [
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onPanStart: (_) => windowManager.startDragging(),
+                onPanStart: PlatformUtils.isDesktop ? (_) => windowManager.startDragging() : null,
                 onDoubleTap: () async {
                   await exitPip();
                 },
@@ -1337,14 +1350,15 @@ class PlayerManager {
                 ),
               ),
               Positioned.fill(child: _buildCompactDanmaku()),
+              if (compactCommentaryBuilder != null) compactCommentaryBuilder!(),
               Center(
                 child: Obx(
                   () => AnimatedOpacity(
                     opacity: isHovered.value ? 1 : 0,
                     duration: const Duration(milliseconds: 200),
                     child: StreamBuilder<bool>(
-                      stream: onPlaying,
-                      initialData: isPlayingNow,
+                      stream: sessionPlayingStream,
+                      initialData: sessionPlaying,
                       builder: (context, snapshot) {
                         var isPlay = snapshot.data ?? true;
                         return IconButton(

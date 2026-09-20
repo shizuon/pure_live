@@ -10,6 +10,9 @@ import 'adapters/player_adapter_factory.dart';
 import 'package:pure_live/common/global/platform_utils.dart';
 import 'package:pure_live/modules/live_play/controllers/commentary_sync_controller.dart';
 import 'package:pure_live/player/core/live_audio_service.dart';
+import 'package:flutter/widgets.dart';
+import 'package:pure_live/modules/live_play/widgets/commentary_video_overlay.dart';
+import 'core/mobile_commentary_observer.dart';
 
 class GlobalPlayerService {
   GlobalPlayerService._();
@@ -21,6 +24,7 @@ class GlobalPlayerService {
   late final CommentarySyncController commentarySyncController;
   PlayerManager get player => playerManager;
   bool _initialized = false;
+  MobileCommentaryObserver? _mobileCommentaryObserver;
   Future<void>? _initializationFuture;
   Future<void>? _disposeFuture;
 
@@ -61,7 +65,25 @@ class GlobalPlayerService {
     await playerManager.initialize(engine: defaultEngine, audioOnly: false);
     commentarySyncController = CommentarySyncController(primaryManager: playerManager, playerPool: playerPool);
     playerManager.controlDelegate = commentarySyncController;
+    playerManager.compactCommentaryBuilder = () => Positioned.fill(
+      child: IgnorePointer(
+        child: Stack(
+          children: [
+            CommentaryVideoOverlay(
+              sync: commentarySyncController,
+              controlsVisible: false,
+              controlsLocked: true,
+              compact: true,
+              onInteraction: () {},
+            ),
+          ],
+        ),
+      ),
+    );
     await LiveAudioService.setControlDelegate(commentarySyncController);
+    if (PlatformUtils.isMobile) {
+      _mobileCommentaryObserver = MobileCommentaryObserver(commentarySyncController);
+    }
     _initialized = true;
     log("GlobalPlayerService: Player initialized.", name: "GlobalPlayerService");
   }
@@ -75,8 +97,11 @@ class GlobalPlayerService {
 
   Future<void> _dispose() async {
     if (!_initialized) return;
+    await _mobileCommentaryObserver?.dispose();
+    _mobileCommentaryObserver = null;
     await commentarySyncController.dispose();
     playerManager.controlDelegate = null;
+    playerManager.compactCommentaryBuilder = null;
     await LiveAudioService.setControlDelegate(null);
     await playerManager.dispose();
     await playerPool.disposeAll();

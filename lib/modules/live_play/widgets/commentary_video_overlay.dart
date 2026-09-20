@@ -21,20 +21,23 @@ class CommentaryVideoOverlay extends StatelessWidget {
     required this.controlsVisible,
     required this.controlsLocked,
     required this.onInteraction,
+    this.compact = false,
   });
 
   final CommentarySyncController sync;
   final bool controlsVisible;
   final bool controlsLocked;
   final VoidCallback onInteraction;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => Obx(() {
     final state = sync.state.value;
     final player = sync.companionPreviewPlayer;
     if (!state.isEngaged ||
-        state.previewVisible ||
+        (!compact && state.previewVisible) ||
         player == null ||
+        (compact && !state.overlayEnabled) ||
         (!state.overlayEditing && !state.overlayEnabled)) {
       return const SizedBox.shrink();
     }
@@ -43,7 +46,8 @@ class CommentaryVideoOverlay extends StatelessWidget {
         key: ObjectKey(player),
         player: player,
         sync: sync,
-        controlsVisible: controlsVisible,
+        compact: compact,
+        controlsVisible: !compact && controlsVisible,
         controlsLocked: controlsLocked,
         onInteraction: onInteraction,
       ),
@@ -59,12 +63,14 @@ class _SourceSizedOverlay extends StatefulWidget {
     required this.controlsVisible,
     required this.controlsLocked,
     required this.onInteraction,
+    required this.compact,
   });
   final UnifiedPlayer player;
   final CommentarySyncController sync;
   final bool controlsVisible;
   final bool controlsLocked;
   final VoidCallback onInteraction;
+  final bool compact;
 
   @override
   State<_SourceSizedOverlay> createState() => _SourceSizedOverlayState();
@@ -90,7 +96,7 @@ class _SourceSizedOverlayState extends State<_SourceSizedOverlay> {
       final ratio = ready ? width / height : 16 / 9;
       return Obx(() {
         final state = widget.sync.state.value;
-        if (state.overlayEditing) {
+        if (state.overlayEditing && !widget.compact) {
           return _CropEditor(
             aspectRatio: ratio,
             ready: ready && state.isActive,

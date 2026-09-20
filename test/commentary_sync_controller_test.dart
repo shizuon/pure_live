@@ -23,6 +23,81 @@ import 'package:pure_live/player/models/player_state.dart';
 import 'package:rxdart/rxdart.dart' show BehaviorSubject;
 
 void main() {
+  test('mobile background changes tracks only; return and exit preserve the source and offset', () async {
+    final opened = <String>[];
+    final primary = _SyncPlayer(position: const Duration(seconds: 30));
+    final companion = _SyncPlayer(position: const Duration(seconds: 27), onOpen: opened.add);
+    final pool = PlayerPool(factory: (_) async => companion);
+    final controller = CommentarySyncController(
+      primaryManager: _PlayerManager(primary: primary, pool: pool),
+      playerPool: pool,
+      platformSupportProbe: () => true,
+      resolver: const _Resolver(),
+    );
+    addTearDown(controller.dispose);
+    await controller.activate(
+      videoRoom: LiveRoom(roomId: 'a', platform: 'test'),
+      audioRoom: LiveRoom(roomId: 'b', platform: 'test'),
+      primaryVolume: .6,
+    );
+    await controller.adjustOffset(100);
+    await controller.setMobileVideoVisible(false);
+    expect(primary.audioOnlyModes, [true]);
+    expect(companion.audioOnlyModes, [true]);
+    expect(companion.isPlayingNow, isTrue);
+    await controller.showCalibrationPreview();
+    expect(companion.audioOnlyModes, [true], reason: 'hidden app cannot re-enable decode from a UI event');
+    await controller.setMobileVideoVisible(true);
+    expect(primary.audioOnlyModes, [true, false]);
+    expect(companion.audioOnlyModes, [true, false]);
+    expect(controller.state.value.offsetMs, 100);
+    expect(opened, hasLength(1));
+    await controller.setMobileVideoVisible(false);
+    await controller.exit();
+    expect(primary.audioOnlyModes, [true, false, true, false]);
+    expect(primary.lastVolume, .6);
+    expect(companion.disposed, isTrue);
+  });
+
+  testWidgets('compact presentation shows the saved B crop without stealing editor state', (tester) async {
+    final controller = _OverlayController(const _PreviewPlayer());
+    controller.state.value = const CommentarySyncState(
+      status: CommentarySyncStatus.active,
+      previewVisible: true,
+      overlayEnabled: true,
+      overlayEditing: true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 320,
+          height: 180,
+          child: Stack(
+            children: [
+              CommentaryVideoOverlay(
+                sync: controller,
+                controlsVisible: true,
+                controlsLocked: false,
+                compact: true,
+                onInteraction: () {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('test-companion-video')), findsOneWidget);
+    expect(find.byKey(const ValueKey('commentary-crop-selection')), findsNothing);
+    expect(find.byKey(const ValueKey('commentary-overlay-resize')), findsNothing);
+    expect(controller.state.value.previewVisible, isTrue);
+    expect(controller.state.value.overlayEditing, isTrue);
+    controller.state.value = controller.state.value.copyWith(overlayEnabled: false);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('test-companion-video')), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('mobile crop handles remain reachable after rotation and confirm keeps the selection', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetDevicePixelRatio);
