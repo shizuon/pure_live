@@ -42,7 +42,7 @@ class KickDanmaku extends LiveDanmaku {
         ],
       },
     },
-    header: {'Origin': 'https://kick.com', 'Referer': 'https://kick.com/'},
+    header: {'User-Agent': 'Mozilla/5.0', 'Origin': 'https://kick.com', 'Referer': 'https://kick.com/'},
   );
 
   Future<void> _connect(Map args, int generation, CancelToken cancel) async {

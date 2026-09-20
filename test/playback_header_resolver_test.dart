@@ -49,4 +49,9 @@ void main() {
       expect(headers.values, everyElement(isNot(contains('\n'))), reason: entry.key);
     }
   });
+
+  test('Kick playback does not inherit the rejected stale Chrome fingerprint', () async {
+    final headers = await PlaybackHeaderResolver.resolve(platform: 'kick', roomId: 'demo');
+    expect(headers['user-agent'], 'Mozilla/5.0');
+  });
 }

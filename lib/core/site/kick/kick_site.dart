@@ -14,7 +14,9 @@ class KickSite extends LiveSite implements LiveSiteRoomRefresher, LiveSiteRecord
     name = 'Kick';
   }
 
-  static const headers = {'User-Agent': TwitchSite.defaultUa, 'Referer': 'https://kick.com/'};
+  // Kick rejects the stale Chrome version used by the Twitch adapter. Keep
+  // platform headers independent; this generic UA is verified with Dio.
+  static const headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://kick.com/'};
   final _directories = <String, _KickDirectory>{};
 
   Future<dynamic> request(String path, {Map<String, dynamic>? query}) =>

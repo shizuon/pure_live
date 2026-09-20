@@ -112,7 +112,7 @@ class PlaybackHeaderResolver {
         };
         break;
       case Sites.kickSite:
-        headers = {'user-agent': _desktopUserAgent, 'origin': 'https://kick.com', 'referer': 'https://kick.com/'};
+        headers = {'user-agent': 'Mozilla/5.0', 'origin': 'https://kick.com', 'referer': 'https://kick.com/'};
         break;
       case Sites.youtubeSite:
         headers = {
