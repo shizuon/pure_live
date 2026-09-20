@@ -94,6 +94,25 @@ YouTube 房间明确显示未开放，不伪装连接成功，也不持续空轮
 - 最终源码 `e46fc641a794f37e840c987d53fb7afec416ea52` 已推送用户仓库 master 与
   `feat/global-platforms-20260921`。主分支一并包含之前移动端、高清 B 和校准修复。
 - Mac [运行 35526922008](https://github.com/shizuon/pure_live/actions/runs/35526922008)
-  已启动，当前进入 macOS Release 编译阶段。此前两个候选运行已取消，不作为交付证据。
+  已成功；下载后确认版本 `3.0.23+4111`，主程序含 `x86_64 arm64`，ZIP CRC、
+  DMG `hdiutil verify` 及两个包的 SHA-256 均通过。仅检查包内容，没有安装或运行应用。
+  此前两个候选运行已取消，不作为交付证据。
+- Mac [下载附件（含 DMG 和 ZIP）](https://github.com/shizuon/pure_live/actions/runs/35526922008/artifacts/10610735959)，
+  GitHub 标记有效期至 `2026-09-23 18:18:35 UTC`，下载通常需要登录 GitHub。
+  外层附件 ZIP 的 SHA-256 与 GitHub 返回的 digest 一致：
+  `2c1d1a8551314073dc6378121396e0b39d0dbed3a894aab31fcd96e2b91fbf17`。
+- Android [运行 35530227640](https://github.com/shizuon/pure_live/actions/runs/35530227640)
+  已在 Mac 核验后串行启动。源码 `d192b717c20ee2596430941af5552b8e1fcd7f95`，
+  相对 Mac 源码仅增加审计文档，业务源码一致。仅启用 Android arm64 测试签名，
+  不创建正式 Release；尚待构建和下载核验。
 - 当前线程自动化 `pure-live-3-0-23` 每 20 分钟继续检查；Mac 下载核验后启动 Android，
   Android 下载核验后启动 iOS，三平台记录完成才停止。此处尚不宣称安装包已完成。
+
+| 已核验产物 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `PureLive-3.0.23-4111-macos-universal.dmg` | 122468086 | `0c7d4681ded8ce0f6b3f74cfac8a3edba809c9a2947f4243e3390b9373d8ae09` |
+| `PureLive-3.0.23-4111-macos-universal.zip` | 106598282 | `1bbc79dcf8e0ff9eaee3fb6d2217b1bcc9793292f4835e40979ffd520fd69709` |
+
+Mac 附件最初经 `gh run download` 两次遇到连接重置；通过 GitHub API 取得同一附件地址，
+使用 curl 重试后完整下载，外层哈希和内层校验均一致。不需要修改源码或重新构建。
+本机忽略目录保留下载产物：`local-artifacts/cloud-global-macos-3.0.23/`。
