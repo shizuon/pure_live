@@ -1346,6 +1346,8 @@
     "twitch_cookie_hint": "Paste the Twitch Cookie",
     "twitch_cookie_tip": "Sign in to Twitch and open a live channel, then copy the complete Cookie from a browser developer-tools network request. The auth-token and login fields are used to read chat. The Cookie stays on this device.",
     "site_twitch": "Twitch",
+    "audience_kick_detail": "Directory and room viewer_count represents concurrent viewers; omitted when search provides no count",
+    "audience_youtube_detail": "Viewer counts are currently unavailable; cumulative video views are not treated as concurrent viewers",
     "audience_twitch_detail": "viewersCount from directory, search and room metadata is shown as the current concurrent viewer count",
     "local_currency_twitch": "Bits",
     "local_level_twitch": "Subscription level",

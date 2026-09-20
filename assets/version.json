@@ -1,17 +1,17 @@
 {
-  "version": "3.0.22",
-  "build_number": 4110,
-  "version_num": 300224110,
+  "version": "3.0.23",
+  "build_number": 4111,
+  "version_num": 300234111,
   "android_abis": ["arm64-v8a"],
-  "version_desc": "3.0.22 移动端候选：Android/iOS 双流触摸校准、高清 B 选档、裁剪覆盖、后台会话控制和 Android PiP 覆盖。尚待实机验证。",
+  "version_desc": "3.0.23 候选：新增 Kick、YouTube 公开直播与弹幕，修复 Twitch 语言过滤、目录遗漏和分页丢房间。安装包及设备测试状态见 Actions 和文档。",
   "prerelease": true,
   "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
   "platforms": {
     "android": {
-      "version": "3.0.22",
-      "build_number": 4110,
-      "version_num": 300224110,
-      "version_desc": "Android 双流迁移候选，APK 以 Actions 实际产物为准；尚待实机验证。",
+      "version": "3.0.23",
+      "build_number": 4111,
+      "version_num": 300234111,
+      "version_desc": "Kick / YouTube 与 Twitch 修复候选，保留移动双流；APK 以 Actions 实际产物为准，尚待实机验证。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
       "android_abis": ["arm64-v8a"]
@@ -34,18 +34,18 @@
       "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
     },
     "macos": {
-      "version": "3.0.21",
-      "build_number": 4109,
-      "version_num": 300214109,
-      "version_desc": "3.0.21 Mac 测试版：连续校准与裁剪保持 B 播放时间线，默认高清并可选 B 画质；加入直播地址恢复与双流音频会话基础，保留三档解码。",
+      "version": "3.0.23",
+      "build_number": 4111,
+      "version_num": 300234111,
+      "version_desc": "Kick / YouTube 与 Twitch 修复候选，保留高清 B、校准、覆盖与三档解码；测试包见 Actions。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },
     "ios": {
-      "version": "3.0.22",
-      "build_number": 4110,
-      "version_num": 300224110,
-      "version_desc": "iOS/iPadOS 双流迁移候选；提供普通未签名 IPA 供自行签名安装，尚待实机验证。",
+      "version": "3.0.23",
+      "build_number": 4111,
+      "version_num": 300234111,
+      "version_desc": "Kick / YouTube 与 Twitch 修复候选，保留移动双流；普通未签名 IPA 自行签名，尚待实机验证。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     }

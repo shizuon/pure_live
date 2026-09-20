@@ -4,7 +4,7 @@ import 'package:pure_live/core/sites.dart';
 
 void main() {
   test('every built-in platform exposes strict playback-complete recording metadata', () {
-    expect(Sites.supportedSiteIds, hasLength(10));
+    expect(Sites.supportedSiteIds, hasLength(12));
     for (final siteId in Sites.supportedSiteIds) {
       expect(Sites.of(siteId).liveSite, isA<LiveSiteRecordRoomResolver>(), reason: siteId);
     }

@@ -12,6 +12,8 @@ class AudienceMetricSettingsPage extends StatelessWidget {
     (id: 'kuaishou', name: '快手', detailKey: 'audience_kuaishou_detail'),
     (id: 'cc', name: '网易 CC', detailKey: 'audience_cc_detail'),
     (id: 'twitch', name: 'Twitch', detailKey: 'audience_twitch_detail'),
+    (id: 'kick', name: 'Kick', detailKey: 'audience_kick_detail'),
+    (id: 'youtube', name: 'YouTube', detailKey: 'audience_youtube_detail'),
     (id: 'soop', name: 'SOOP', detailKey: 'audience_soop_detail'),
     (id: 'yy', name: 'YY Live', detailKey: 'audience_yy_detail'),
   ];

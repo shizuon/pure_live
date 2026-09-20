@@ -868,6 +868,14 @@ class LivePlayController extends GetxController
         nativeUrl = "https://www.twitch.tv/${detail.roomId}";
         webUrl = "https://www.twitch.tv/${detail.roomId}";
         break;
+      case Sites.kickSite:
+        nativeUrl = 'https://kick.com/${detail.roomId}';
+        webUrl = nativeUrl;
+        break;
+      case Sites.youtubeSite:
+        nativeUrl = detail.link ?? 'https://www.youtube.com/';
+        webUrl = nativeUrl;
+        break;
       case Sites.soopSite:
         nativeUrl = "https://play.sooplive.co.kr/${detail.roomId}";
         webUrl = nativeUrl;

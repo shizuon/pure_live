@@ -34,6 +34,8 @@ void main() {
       'kuaishou': 'https://live.kuaishou.com',
       'cc': 'https://cc.163.com',
       'twitch': 'https://www.twitch.tv',
+      'kick': 'https://kick.com',
+      'youtube': 'https://www.youtube.com',
       'soop': 'https://www.sooplive.co.kr',
       'yy': 'https://www.yy.com',
     };

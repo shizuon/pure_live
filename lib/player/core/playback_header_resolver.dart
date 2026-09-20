@@ -111,6 +111,16 @@ class PlaybackHeaderResolver {
           if (cookie.isNotEmpty) 'cookie': cookie,
         };
         break;
+      case Sites.kickSite:
+        headers = {'user-agent': _desktopUserAgent, 'origin': 'https://kick.com', 'referer': 'https://kick.com/'};
+        break;
+      case Sites.youtubeSite:
+        headers = {
+          'user-agent': _desktopUserAgent,
+          'origin': 'https://www.youtube.com',
+          'referer': 'https://www.youtube.com/',
+        };
+        break;
       case Sites.yySite:
         final cookie = _configuredCookie((settings) => settings.cookieManager.yyCookie.value);
         headers = <String, String>{

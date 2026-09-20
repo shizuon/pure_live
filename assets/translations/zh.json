@@ -1346,6 +1346,8 @@
     "twitch_cookie_hint": "粘贴 Twitch Cookie",
     "twitch_cookie_tip": "登录 Twitch 网页并进入任意直播间，在浏览器开发者工具的网络请求中复制完整 Cookie；其中 auth-token 与 login 用于读取聊天。Cookie 仅保存在本机。",
     "site_twitch": "Twitch",
+    "audience_kick_detail": "直播目录和房间的 viewer_count 按当前并发观看人数显示；搜索未返回时不显示人数",
+    "audience_youtube_detail": "暂不展示观看人数，避免把累计播放次数当成实时在线人数",
     "audience_twitch_detail": "目录、搜索和直播间元数据的 viewersCount 均按当前并发观看人数显示",
     "local_currency_twitch": "Bits",
     "local_level_twitch": "订阅等级",

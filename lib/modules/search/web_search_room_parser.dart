@@ -1,4 +1,6 @@
 import 'package:pure_live/core/sites.dart';
+import 'package:pure_live/core/site/youtube/youtube_site.dart';
+import 'package:pure_live/core/site/twitch/twitch_site.dart';
 
 class WebSearchRoomTarget {
   const WebSearchRoomTarget({required this.platform, required this.roomId});
@@ -61,7 +63,15 @@ class WebSearchRoomParser {
       return _firstSegment(segments, Sites.bilibiliSite, RegExp(r'^\d+$'));
     }
     if (_matchesHost(host, 'twitch.tv')) {
-      return _firstSegment(segments, Sites.twitchSite, RegExp(r'^[a-zA-Z0-9_]+$'));
+      final login = TwitchSite.channelLogin(rawUrl);
+      return login == null ? null : WebSearchRoomTarget(platform: Sites.twitchSite, roomId: login);
+    }
+    if (_matchesHost(host, 'kick.com') && segments.length == 1) {
+      return _firstSegment(segments, Sites.kickSite, RegExp(r'^[a-zA-Z0-9_-]+$'));
+    }
+    if (_matchesHost(host, 'youtube.com') || host == 'youtu.be') {
+      final roomId = YouTubeSite.roomIdentity(rawUrl);
+      return roomId == null ? null : WebSearchRoomTarget(platform: Sites.youtubeSite, roomId: roomId);
     }
     if (_matchesHost(host, 'sooplive.co.kr')) {
       return _firstSegment(segments, Sites.soopSite, RegExp(r'^[a-zA-Z0-9_-]+$'));

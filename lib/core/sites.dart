@@ -1,16 +1,18 @@
 import 'site/yy/yy_site.dart';
+import 'site/kick/kick_site.dart';
+import 'site/youtube/youtube_site.dart';
 import 'site/soop/soop_site.dart';
 import 'site/huya/huya_site.dart';
 import 'interface/live_site.dart';
 import 'site/douyu/douyu_site.dart';
 import 'site/douyin/douyin_site.dart';
+
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/core/site/cc/cc_site.dart';
 import 'package:pure_live/core/site/iptv/iptv_site.dart';
 import 'package:pure_live/core/site/twitch/twitch_site.dart';
 import 'package:pure_live/core/site/kuaishou/kuaishou_site.dart';
 import 'package:pure_live/core/site/bilibili/bilibili_site.dart';
-
 
 class Sites {
   static const String allSite = "all";
@@ -22,6 +24,8 @@ class Sites {
   static const String ccSite = "cc";
   static const String iptvSite = "iptv";
   static const String twitchSite = "twitch";
+  static const String kickSite = 'kick';
+  static const String youtubeSite = 'youtube';
   static const String soopSite = 'soop';
   static const String yySite = 'yy';
 
@@ -33,6 +37,8 @@ class Sites {
     kuaishouSite,
     ccSite,
     twitchSite,
+    kickSite,
+    youtubeSite,
     soopSite,
     yySite,
     iptvSite,
@@ -48,6 +54,8 @@ class Sites {
     Site(id: kuaishouSite, name: i18n("site_kuaishou"), logo: "assets/images/kuaishou.png", liveSite: KuaishowSite()),
     Site(id: ccSite, name: i18n("site_cc"), logo: "assets/images/cc.png", liveSite: CCSite()),
     Site(id: twitchSite, name: i18n("site_twitch"), logo: "assets/images/twitch.png", liveSite: TwitchSite()),
+    Site(id: kickSite, name: 'Kick', logo: 'assets/images/kick.png', liveSite: KickSite()),
+    Site(id: youtubeSite, name: 'YouTube', logo: 'assets/images/youtube.png', liveSite: YouTubeSite()),
     Site(id: soopSite, name: i18n("site_soop"), logo: "assets/images/soop.png", liveSite: SoopSite()),
     Site(id: yySite, name: i18n("site_yy"), logo: "assets/images/yy.png", liveSite: YYSite()),
     Site(id: iptvSite, name: i18n("site_iptv"), logo: "assets/images/logo.png", liveSite: IptvSite()),
@@ -93,6 +101,8 @@ class Sites {
         liveSite: TwitchSite(),
       ),
       soopSite => Site(id: soopSite, name: i18n("site_soop"), logo: "assets/images/soop.png", liveSite: SoopSite()),
+      kickSite => Site(id: kickSite, name: 'Kick', logo: 'assets/images/kick.png', liveSite: KickSite()),
+      youtubeSite => Site(id: youtubeSite, name: 'YouTube', logo: 'assets/images/youtube.png', liveSite: YouTubeSite()),
       yySite => Site(id: yySite, name: i18n("site_yy"), logo: "assets/images/yy.png", liveSite: YYSite()),
       iptvSite => Site(id: iptvSite, name: i18n("site_iptv"), logo: "assets/images/logo.png", liveSite: IptvSite()),
       _ => throw StateError('Unsupported live site: $normalizedId'),

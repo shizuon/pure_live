@@ -79,6 +79,11 @@ class LiveRoom {
       hasTotalViewers: false,
       onlineAvailability: AudienceOnlineAvailability.roomList,
     ),
+    'kick': AudiencePlatformCapability(
+      hasPopularity: false,
+      hasTotalViewers: false,
+      onlineAvailability: AudienceOnlineAvailability.roomList,
+    ),
     // SOOP lists expose total_view_cnt/view_cnt as PC + mobile concurrent
     // viewers. current_view_cnt alone is PC-only and must not be displayed as
     // the total audience; player metadata may omit the count altogether.
@@ -391,7 +396,7 @@ class LiveRoom {
     }
     return switch (normalizedPlatformId) {
       'bilibili' || 'douyu' || 'huya' || 'cc' || 'yy' => AudienceMetricType.popularity,
-      'kuaishou' || 'twitch' || 'soop' => AudienceMetricType.onlineViewers,
+      'kuaishou' || 'twitch' || 'soop' || 'kick' => AudienceMetricType.onlineViewers,
       'douyin' => AudienceMetricType.totalViewers,
       _ => AudienceMetricType.unknown,
     };

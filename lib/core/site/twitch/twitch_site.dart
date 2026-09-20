@@ -43,6 +43,8 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
     headers['device-id'] = _deviceId;
     if (SettingsService.to.cookieManager.twitchCookie.v.isNotEmpty) {
       headers["Cookie"] = SettingsService.to.cookieManager.twitchCookie.v;
+    } else {
+      headers.remove('Cookie');
     }
   }
 
@@ -77,43 +79,22 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
   }
 
   String getCursor(String type, String id, int page) {
+    if (page == 1) {
+      final prefix = '${type}_${id}_';
+      cursorMap.removeWhere((key, _) => key.startsWith(prefix));
+      return '';
+    }
     var key = buildCursorKey(type, id, page);
     return cursorMap[key] ?? "";
   }
 
   @override
   Future<List<LiveCategory>> getCategores(int page, int pageSize) async {
-    try {
-      var liveGpl = buildPersistedRequest(
-        "SearchCategoryTags",
-        "b4cb189d8d17aadf29c61e9d7c7e7dcfc932e93b77b3209af5661bffb484195f",
-        {"userQuery": "", "limit": 100},
-      );
-
-      var response = await getGplResponse(liveGpl);
-
-      List<LiveCategory> categories = [];
-      var data = response['data'];
-      var searchCategoryTags = data['searchCategoryTags'];
-      for (var item in searchCategoryTags) {
-        categories.add(LiveCategory(id: item["id"], name: item["tagName"], children: []));
-      }
-
-      List<Future> futures = [];
-      for (var item in categories) {
-        futures.add(
-          Future(() async {
-            var items = await getAllSubCategores(item, 1, 30, []);
-            item.children.addAll(items);
-          }),
-        );
-      }
-      await Future.wait(futures);
-      return categories;
-    } catch (e) {
-      CoreLog.error(e);
-      return [];
-    }
+    // The category UI consumes a complete catalogue and paginates locally.
+    // Tag suggestions are not a catalogue: untagged games never appeared.
+    final category = LiveCategory(id: '', name: 'Twitch', children: []);
+    category.children.addAll(await getAllSubCategores(category, 1, 100, []));
+    return [category];
   }
 
   Future<List<LiveArea>> getAllSubCategores(
@@ -122,19 +103,16 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
     int pageSize,
     List<LiveArea> allSubCategores,
   ) async {
-    try {
-      var subsArea = await getSubCategores(liveCategory, page, pageSize);
-      allSubCategores.addAll(subsArea);
-      var hasMore = subsArea.length >= pageSize;
-      if (hasMore) {
-        page++;
-        await getAllSubCategores(liveCategory, page, pageSize, allSubCategores);
-      }
-      return allSubCategores;
-    } catch (e) {
-      CoreLog.error(e);
-      return allSubCategores;
+    final seenIds = allSubCategores.map((area) => area.areaId).toSet();
+    final seenCursors = <String>{};
+    while (true) {
+      final areas = await getSubCategores(liveCategory, page, pageSize);
+      allSubCategores.addAll(areas.where((area) => seenIds.add(area.areaId)));
+      final next = getCursor('getSubCategores', liveCategory.id, ++page);
+      if (next.isEmpty) break;
+      if (!seenCursors.add(next)) throw StateError('Twitch repeated a category cursor');
     }
+    return allSubCategores;
   }
 
   Future<List<LiveArea>> getSubCategores(LiveCategory liveCategory, int page, int pageSize) async {
@@ -153,7 +131,7 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
           "recommendationsContext": {"platform": "web"},
           "requestID": "JIRA-VXP-2397",
           "sort": "VIEWER_COUNT",
-          "tags": [liveCategory.id],
+          "tags": [if (liveCategory.id.isNotEmpty) liveCategory.id],
         },
         if (cursor.isNotEmpty) "cursor": cursor,
       },
@@ -163,7 +141,7 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
     var directoriesWithTags = response['data']['directoriesWithTags'] ?? {};
     var edges = (directoriesWithTags['edges'] ?? []) as List;
     var pageInfo = directoriesWithTags['pageInfo'];
-    var hasNextPage = pageInfo['hasNextPage'];
+    var hasNextPage = pageInfo?['hasNextPage'] == true;
     cursor = edges.isEmpty ? "" : (edges.last["cursor"] ?? "");
     if (!hasNextPage) cursor = "";
     saveCursor(cursorType, cursorId, page, cursor);
@@ -252,7 +230,7 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
   /// arrays and attached the wrong label to the stream. Keeping parser state
   /// local also prevents simultaneous multi-view requests from clearing one
   /// another's shared URL list.
-  @visibleForTesting
+  /// Also used by Kick and YouTube, whose live HLS variants share this format.
   static List<LivePlayQuality> parseMasterPlaylist(String content, {required Uri masterUri}) {
     final grouped = <String, ({String label, int bandwidth, int sort, List<String> urls})>{};
     Map<String, String>? pendingAttributes;
@@ -433,8 +411,7 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
       }),
     ];
     String requestQuery = "[${queries.map((q) => q.toString()).join(',')}]";
-    getRequestHeaders();
-    var response = await HttpClient.instance.postJson(gplApiUrl, header: headers, data: requestQuery);
+    var response = await getGplResponse(requestQuery);
 
     final decoded = response is List ? response : const <dynamic>[];
     final responses = decoded.map((item) => TwitchResponse.fromJson(item as Map<String, dynamic>)).toList();
@@ -465,7 +442,7 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
               "requestID": "JIRA-VXP-2397",
               "freeformTags": null,
               "tags": [],
-              "broadcasterLanguages": ["ZH", "KO"],
+              "broadcasterLanguages": [],
               "systemFilters": [],
             },
             "sortTypeIsRecency": false,
@@ -484,19 +461,17 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
       var liveGpl = jsonEncode(params);
       var response = await getGplResponse(liveGpl);
 
-      var directoriesWithTags = response[0]['data']['game']['streams'] ?? {};
+      var directoriesWithTags = response[0]['data']?['game']?['streams'] ?? {};
       var edges = (directoriesWithTags['edges'] ?? []) as List;
       var pageInfo = directoriesWithTags['pageInfo'];
-      var hasNextPage = pageInfo['hasNextPage'];
-      if (edges.isEmpty) {
-        return <LiveRoom>[];
-      }
-      cursor = edges.last["cursor"] ?? "";
+      var hasNextPage = pageInfo?['hasNextPage'] == true;
+      cursor = edges.isEmpty ? '' : edges.last["cursor"] ?? "";
       if (!hasNextPage) cursor = "";
       saveCursor(cursorType, cursorId, page, cursor);
       List<LiveRoom> subs = [];
       for (var item in edges) {
         var node = item['node'];
+        if (node?['broadcaster']?['login'] == null) continue;
         var subItem = LiveRoom(
           roomId: node["broadcaster"]["login"],
           title: node["title"],
@@ -505,17 +480,17 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
               .replaceFirst("https://", "https://i2.wp.com/")
               .appendTxt("?&t=${DateTime.now().millisecondsSinceEpoch ~/ 1000}"),
           nick: node["broadcaster"]["displayName"],
-          avatar: node["broadcaster"]["profileImageURL"].replaceFirst("https://", "https://i2.wp.com/"),
+          avatar: (node["broadcaster"]["profileImageURL"] ?? '').toString(),
           watching: (node["viewersCount"] ?? 0).toString(),
           onlineViewers: (node["viewersCount"] ?? 0).toString(),
           audienceMetricType: AudienceMetricType.onlineViewers,
           status: true,
           introduction: "",
           notice: "",
-          danmakuData: node["broadcaster"]["id"],
+          danmakuData: node["broadcaster"]["login"],
           platform: id,
           liveStatus: LiveStatus.live,
-          area: node["game"]["displayName"],
+          area: node["game"]?["displayName"] ?? category.areaName,
           data: null,
         );
         subs.add(subItem);
@@ -523,12 +498,16 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
       return subs;
     } catch (e) {
       CoreLog.error(e);
-      return [];
+      rethrow;
     }
   }
 
   @override
   Future<List<LiveRoom>> searchRooms(String keyword, {int page = 1, int pageSize = 30}) async {
+    final login = channelLogin(keyword);
+    if (keyword.trim().contains('://') && login != null) {
+      return page == 1 ? [await _loadRoomDetail(login)] : [];
+    }
     var cursorType = "searchRooms";
     var cursorId = keyword;
     String cursor = getCursor(cursorType, cursorId, page);
@@ -547,26 +526,40 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
         if (cursor.isNotEmpty) "cursor": cursor,
       },
     );
-    var response = await getGplResponse(liveGpl);
+    // An exact login need not be indexed by Twitch's fuzzy search yet.
+    final exactLookup = page == 1 && login != null
+        ? _loadRoomDetail(login).then<LiveRoom?>((room) => room, onError: (_) => null)
+        : Future<LiveRoom?>.value();
+    dynamic response;
+    try {
+      response = await getGplResponse(liveGpl);
+    } catch (_) {
+      final exact = await exactLookup;
+      if (exact != null) return [exact];
+      rethrow;
+    }
 
     var directoriesWithTags = response['data']['searchFor']['channels'] ?? {};
     cursor = directoriesWithTags["cursor"] ?? "";
     saveCursor(cursorType, cursorId, page, cursor);
     var edges = (directoriesWithTags['edges'] ?? []) as List;
-    List<LiveRoom> subs = [];
+    final exact = await exactLookup;
+    List<LiveRoom> subs = [if (exact != null) exact];
+    final seen = {if (exact != null) exact.roomId};
     for (var item in edges) {
       var node = item['item'];
+      if (node?['login'] == null || !seen.add(node['login'])) continue;
       var stream = node["stream"];
       var status = stream != null;
       var subItem = LiveRoom(
         roomId: node["login"],
-        title: node["broadcastSettings"]["title"],
+        title: node["broadcastSettings"]?["title"] ?? '',
         cover: (node["stream"]?["previewImageURL"] ?? "")
             .toString()
             .replaceFirst("https://", "https://i2.wp.com/")
             .appendTxt("?&t=${DateTime.now().millisecondsSinceEpoch ~/ 1000}"),
         nick: node["displayName"],
-        avatar: node["profileImageURL"].replaceFirst("https://", "https://i2.wp.com/"),
+        avatar: (node["profileImageURL"] ?? '').toString(),
         watching: (node["stream"]?["viewersCount"] ?? 0).toString(),
         onlineViewers: (node["stream"]?["viewersCount"] ?? 0).toString(),
         audienceMetricType: AudienceMetricType.onlineViewers,
@@ -582,6 +575,25 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
       subs.add(subItem);
     }
     return subs;
+  }
+
+  static String? channelLogin(String input) {
+    var login = input.trim();
+    if (login.contains('://')) {
+      final uri = Uri.tryParse(login);
+      if (uri == null ||
+          !{'http', 'https'}.contains(uri.scheme) ||
+          !(uri.host == 'twitch.tv' || uri.host.endsWith('.twitch.tv')) ||
+          uri.pathSegments.length != 1) {
+        return null;
+      }
+      login = uri.pathSegments.single;
+    }
+    if (!RegExp(r'^[a-zA-Z0-9_]{1,25}$').hasMatch(login) ||
+        {'directory', 'search', 'videos', 'downloads', 'settings', 'login', 'signup'}.contains(login.toLowerCase())) {
+      return null;
+    }
+    return login.toLowerCase();
   }
 
   @override

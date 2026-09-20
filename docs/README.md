@@ -4,6 +4,8 @@
 
 ## 开发与发布
 
+- [Kick / YouTube 接入与 Twitch 遗漏修复](GLOBAL_PLATFORMS_AUDIT.md)：支持范围、接口证据、回归与测试包记录。
+
 - [旧维护阶段的问题处置策略](../MAINTENANCE_POLICY.md)：历史上的 Android/Windows 维护边界、Issue 分流和验证流程；当前范围以根目录 README 为准。
 - [上游同步审查策略](../UPSTREAM_REVIEW_POLICY.md)：三方差异、全入站文件审查、语义变更台账、冲突处置与合并门禁。
 - [Bug 根因分析模板](BUG_TRIAGE_TEMPLATE.md)：复现基线、来源分类、首次错误状态、影响矩阵与分层证据模板。

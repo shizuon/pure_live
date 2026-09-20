@@ -67,6 +67,10 @@ class SearchController extends GetxController {
         return "https://www.douyin.com/search/$q?type=live";
       case Sites.twitchSite:
         return "https://www.twitch.tv/search?term=$q";
+      case Sites.kickSite:
+        return 'https://kick.com/search?query=$q';
+      case Sites.youtubeSite:
+        return 'https://www.youtube.com/results?search_query=$q&sp=EgJAAQ%3D%3D';
       case Sites.soopSite:
         return "https://www.sooplive.co.kr/?szKeyword=$q";
       case Sites.yySite:

@@ -24,6 +24,8 @@ class LiveSearchCapabilities {
     Sites.kuaishouSite: LiveSearchCapability(coverage: NativeSearchCoverage.webOnly, supportsPagination: false),
     Sites.ccSite: LiveSearchCapability(coverage: NativeSearchCoverage.liveAndOffline, supportsPagination: true),
     Sites.twitchSite: LiveSearchCapability(coverage: NativeSearchCoverage.liveAndOffline, supportsPagination: true),
+    Sites.kickSite: LiveSearchCapability(coverage: NativeSearchCoverage.liveAndOffline, supportsPagination: false),
+    Sites.youtubeSite: LiveSearchCapability(coverage: NativeSearchCoverage.liveOnly, supportsPagination: true),
     Sites.soopSite: LiveSearchCapability(coverage: NativeSearchCoverage.liveOnly, supportsPagination: true),
     Sites.yySite: LiveSearchCapability(coverage: NativeSearchCoverage.liveAndOffline, supportsPagination: true),
     Sites.iptvSite: LiveSearchCapability(

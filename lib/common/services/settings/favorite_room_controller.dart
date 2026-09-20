@@ -44,18 +44,21 @@ class FavoriteRoomController extends GetxController {
   }
 
   void _migrateSiteCatalog() {
-    if (siteCatalogMigration.v >= 2) return;
+    if (siteCatalogMigration.v >= 3) return;
 
     final updated = List<String>.from(hotAreasList);
 
-    for (final site in Sites.supportSites) {
-      if (!updated.contains(site.id)) {
-        updated.add(site.id);
+    final additions = siteCatalogMigration.v < 2
+        ? Sites.supportSites.map((site) => site.id)
+        : [Sites.kickSite, Sites.youtubeSite];
+    for (final id in additions) {
+      if (!updated.contains(id)) {
+        updated.add(id);
       }
     }
 
     hotAreasList.assignAll(updated);
-    siteCatalogMigration.v = 2;
+    siteCatalogMigration.v = 3;
   }
 
   void _normalizeSiteCatalogIds() {

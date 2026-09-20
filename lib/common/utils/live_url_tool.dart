@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'package:dio/dio.dart' as dio;
 import 'package:flutter/services.dart';
 import 'package:pure_live/common/index.dart';
+import 'package:pure_live/modules/search/web_search_room_parser.dart';
 import 'package:pure_live/modules/live_play/dialogs/live_dlna_dialog.dart';
 
 class LiveUrlTool {
@@ -15,6 +16,11 @@ class LiveUrlTool {
     if (urlMatches.isEmpty) return [];
 
     String realUrl = urlMatches.first!;
+    if (realUrl.startsWith('www.')) realUrl = 'https://$realUrl';
+    final imported = WebSearchRoomParser.parse(realUrl);
+    if (imported != null && {Sites.kickSite, Sites.youtubeSite, Sites.twitchSite}.contains(imported.platform)) {
+      return [imported.roomId, imported.platform];
+    }
 
     // B站短链跳转
     if (realUrl.contains("b23.tv")) {
@@ -84,9 +90,7 @@ class LiveUrlTool {
       return [id, Sites.ccSite];
     }
     if (realUrl.contains("twitch.tv/")) {
-      final regExp = RegExp(r'twitch\.tv/([^/?]+)');
-      String id = regExp.firstMatch(url)?.group(1) ?? "";
-      return [id, Sites.twitchSite];
+      return [];
     }
     if (realUrl.contains("sooplive.com/") || realUrl.contains("sooplive.co.kr/")) {
       final regExp = RegExp(r'(?:www\.|play\.)?sooplive\.(?:com|co\.kr)/([^/?]+)');

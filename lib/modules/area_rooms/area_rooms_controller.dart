@@ -58,7 +58,7 @@ class AreaServerRemoteController extends ServerRemotePageController<LiveRoom> {
   @override
   Future<List<LiveRoom>> fetchNetworkData(int page, int pageSize) async {
     try {
-      final result = await site.liveSite.getCategoryRooms(subCategory, page: page);
+      final result = await site.liveSite.getCategoryRooms(subCategory, page: page, pageSize: pageSize);
       for (var element in result) {
         element.area = subCategory.areaName;
       }
