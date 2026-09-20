@@ -91,3 +91,5 @@ Android 仓库目前未配置正式签名 Secrets。本轮显式选择 `android_
 - Mac `3.0.21+4109`：冻结提交 `57d507e2c7cfdd5aaa90b037830ffa93824835ee`，[运行 35515581371](https://github.com/shizuon/pure_live/actions/runs/35515581371) 成功。完整质量门、原生编译、应用/ZIP/DMG 校验和上传均通过；`hdiutil verify` 明确返回 VALID。[附件 pure-live-macos](https://github.com/shizuon/pure_live/actions/runs/35515581371/artifacts/10607481324)，222269219 字节，GitHub 上传归档 SHA256 为 `4c9bccfd997422a4b1ab6d7b18b7347cd5f6dddeb8776f987ed0ab6b92b4e2ae`。本机下载遇到 TLS/连接重置，下载后复核尚未完成；云端检查不代替用户实际播放测试。
 - Android `3.0.22+4110`：冻结提交 `ea80da9c9e947c52a057a61da4a5b8b18112bceb`，[运行 35517965163](https://github.com/shizuon/pure_live/actions/runs/35517965163) 完整质量门成功，Android 原生构建运行中。打包后增加既有 `verify_android_apk.ps1` 检查资源和关键库，并检查签名、包名、版本与 ABI；未取得产物前不记为交付完成。
 - iOS：等待 Android 阶段完成，随后使用同一最终业务源码串行构建普通未签名 IPA。尚无本轮原生编译或安装成功证据。
+
+Android 首轮后续结果：原生 APK 编译成功，内容检查及 APK v2 签名验证成功；新加的 manifest 校验把 Flutter build `4110` 误当成 split arm64 的 Android versionCode，因此报 `Wrong version`。Flutter 3.47 的 ABI 规则为 arm64 `2 × 1000 + build`，正确值是 `6110`。来源为本轮 CI 脚本回归，应用源码没有版本错误。修正校验器，并覆盖正确 split 值、错误 build/版本/包名/混合 ABI 的回归测试；打包校验 Python 共 5 项通过。后续仅重试打包，复用首轮已通过的静态检查与 528 项 Flutter 测试，不修改应用源码或重复执行全量门禁。
