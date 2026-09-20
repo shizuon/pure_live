@@ -82,10 +82,12 @@ Android 兼容模式的 `mediacodec` 配置现在只在 Android 生效，防止�
 
 用户选择自行签名。云端在 TrollStore 专用签名前独立生成 `PureLive-*-ios-arm64-unsigned.ipa`，以 `Payload/Runner.app` 打包；`pure-live-ios-self-sign` 附件包含 IPA 与 SHA256，即使后续 TrollStore 步骤失败也保留普通 IPA。交付前检查 ZIP 完整性、设备平台标记、主程序、Flutter/AOT 二进制与资源，不把结构校验等同于签名或设备验收。签名工具仍需处理嵌入的分享扩展及所用账号支持的权限。
 
+IPA 校验器进一步读取主程序、Flutter 和 AOT 的 Mach-O 架构头，要求存在真实 arm64 薄二进制或边界有效的 arm64 universal 切片；拒绝只有 x86_64、截断文件和伪造架构表。校验器 3 项 Python 测试通过。它不替代 Apple 签名、完整二进制可执行性或设备运行检查。
+
 Android 仓库目前未配置正式签名 Secrets。本轮显式选择 `android_test_signing=true`，只交付名称带 `test-signed` 的候选 APK，使用云端临时 debug 证书。该证书不保证跨构建一致，不能覆盖不同证书的旧包；测试前应导出数据。此选项禁止与 `create_release=true` 同用；正式发布仍要求原有正式签名配置。
 
 ## 云端交付记录
 
 - Mac `3.0.21+4109`：冻结提交 `57d507e2c7cfdd5aaa90b037830ffa93824835ee`，[运行 35515581371](https://github.com/shizuon/pure_live/actions/runs/35515581371) 成功。完整质量门、原生编译、应用/ZIP/DMG 校验和上传均通过；`hdiutil verify` 明确返回 VALID。[附件 pure-live-macos](https://github.com/shizuon/pure_live/actions/runs/35515581371/artifacts/10607481324)，222269219 字节，GitHub 上传归档 SHA256 为 `4c9bccfd997422a4b1ab6d7b18b7347cd5f6dddeb8776f987ed0ab6b92b4e2ae`。本机下载遇到 TLS/连接重置，下载后复核尚未完成；云端检查不代替用户实际播放测试。
-- Android `3.0.22+4110`：冻结提交 `ea80da9c9e947c52a057a61da4a5b8b18112bceb`，[运行 35517965163](https://github.com/shizuon/pure_live/actions/runs/35517965163) 已启动，完整质量门运行中。打包后增加既有 `verify_android_apk.ps1` 检查资源和关键库，并检查签名、包名、版本与 ABI；未取得产物前不记为交付完成。
+- Android `3.0.22+4110`：冻结提交 `ea80da9c9e947c52a057a61da4a5b8b18112bceb`，[运行 35517965163](https://github.com/shizuon/pure_live/actions/runs/35517965163) 完整质量门成功，Android 原生构建运行中。打包后增加既有 `verify_android_apk.ps1` 检查资源和关键库，并检查签名、包名、版本与 ABI；未取得产物前不记为交付完成。
 - iOS：等待 Android 阶段完成，随后使用同一最终业务源码串行构建普通未签名 IPA。尚无本轮原生编译或安装成功证据。

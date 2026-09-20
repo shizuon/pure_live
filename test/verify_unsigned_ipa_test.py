@@ -1,5 +1,6 @@
 import importlib.util
 import plistlib
+import struct
 import tempfile
 import unittest
 import zipfile
@@ -11,12 +12,14 @@ spec.loader.exec_module(module)
 
 
 class IpaPackagingTest(unittest.TestCase):
+    arm64 = struct.pack('<8I', 0xFEEDFACF, 0x0100000C, 0, 2, 0, 0, 0, 0)
+
     def make(self, path, *, platform="iPhoneOS", missing=None):
         prefix = "Payload/Runner.app/"
         members = {
-            "Runner": b"app",
-            "Frameworks/Flutter.framework/Flutter": b"flutter",
-            "Frameworks/App.framework/App": b"aot",
+            "Runner": self.arm64,
+            "Frameworks/Flutter.framework/Flutter": self.arm64,
+            "Frameworks/App.framework/App": self.arm64,
             "Frameworks/App.framework/flutter_assets/AssetManifest.bin": b"assets",
             "Info.plist": plistlib.dumps(dict(CFBundleExecutable="Runner", CFBundleIdentifier="test.app",
                 CFBundleShortVersionString="3.0.22", CFBundleVersion="4110", CFBundleSupportedPlatforms=[platform])),
@@ -41,6 +44,14 @@ class IpaPackagingTest(unittest.TestCase):
             self.make(path, missing="Frameworks/App.framework/App")
             with self.assertRaisesRegex(ValueError, "Missing or empty"):
                 module.verify(path)
+
+    def test_architecture_and_fat_slice_bounds(self):
+        fat = struct.pack('>7I', 0xCAFEBABE, 1, 0x0100000C, 0, 28, 32, 0) + self.arm64
+        module.verify_arm64(fat, 'fat fixture')
+        x64 = struct.pack('<8I', 0xFEEDFACF, 0x01000007, 0, 2, 0, 0, 0, 0)
+        for invalid in [x64, b'not a binary', fat[:-1], fat[:28] + x64]:
+            with self.assertRaises(ValueError):
+                module.verify_arm64(invalid, 'invalid fixture')
 
 
 if __name__ == "__main__":
