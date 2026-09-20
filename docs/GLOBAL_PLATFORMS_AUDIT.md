@@ -102,17 +102,31 @@ YouTube 房间明确显示未开放，不伪装连接成功，也不持续空轮
   外层附件 ZIP 的 SHA-256 与 GitHub 返回的 digest 一致：
   `2c1d1a8551314073dc6378121396e0b39d0dbed3a894aab31fcd96e2b91fbf17`。
 - Android [运行 35530227640](https://github.com/shizuon/pure_live/actions/runs/35530227640)
-  已在 Mac 核验后串行启动。源码 `d192b717c20ee2596430941af5552b8e1fcd7f95`，
+  已成功并下载核验。源码 `d192b717c20ee2596430941af5552b8e1fcd7f95`，
   相对 Mac 源码仅增加审计文档，业务源码一致。仅启用 Android arm64 测试签名，
-  不创建正式 Release；尚待构建和下载核验。
-- 当前线程自动化 `pure-live-3-0-23` 每 20 分钟继续检查；Mac 下载核验后启动 Android，
-  Android 下载核验后启动 iOS，三平台记录完成才停止。此处尚不宣称安装包已完成。
+  不创建正式 Release。云端内容检查通过（1261 个 Flutter 资源），签名 v2 验证通过；
+  manifest 为 `3.0.23`、versionCode `6111`（Flutter build `4111` 加 arm64 偏移 `2000`）。
+  本机下载后 APK SHA-256 与云端校验文件一致，ZIP CRC、版本资源和唯一 ABI
+  `arm64-v8a` 均通过，没有安装或操作设备。
+- Android [下载测试 APK](https://github.com/shizuon/pure_live/actions/runs/35530227640/artifacts/10611510440)，
+  GitHub 标记有效期至 `2026-09-23 18:59:05 UTC`。使用本次构建临时测试证书，
+  证书 SHA-256 为 `2dbe4c825bcb06569fc8812c24052108d9b875a76d0aae0c4c96f067c720ba21`；
+  与已安装版本签名不同时不能直接覆盖升级，请先备份设置，不把它当固定证书正式包。
+- iOS [运行 35531634781](https://github.com/shizuon/pure_live/actions/runs/35531634781)
+  已在 Android 核验后串行启动。构建 ref 为 `feat/global-platforms-20260921`，
+  预期提交 `a453e090315718a6f92102aaebf0a592813a0247`；相对 Mac 仅文档变化。
+  仅启用 iOS，不发布 Release；尚待普通未签名 IPA 下载和自签名结构核验。
+- 当前线程自动化 `pure-live-3-0-23` 每 20 分钟继续检查 iOS；三平台记录完成才停止。
+  Mac、Android 已完成包核验，iOS 尚未完成；全部平台仍缺少设备播放验证。
 
 | 已核验产物 | 字节数 | SHA-256 |
 | --- | ---: | --- |
 | `PureLive-3.0.23-4111-macos-universal.dmg` | 122468086 | `0c7d4681ded8ce0f6b3f74cfac8a3edba809c9a2947f4243e3390b9373d8ae09` |
 | `PureLive-3.0.23-4111-macos-universal.zip` | 106598282 | `1bbc79dcf8e0ff9eaee3fb6d2217b1bcc9793292f4835e40979ffd520fd69709` |
+| `PureLive-3.0.23-4111-android-arm64-v8a-test-signed.apk` | 118731207 | `355d8d1c39bff1d67a2bb88dd36374844d86b456653ca17ecea72682de91b8bb` |
 
 Mac 附件最初经 `gh run download` 两次遇到连接重置；通过 GitHub API 取得同一附件地址，
 使用 curl 重试后完整下载，外层哈希和内层校验均一致。不需要修改源码或重新构建。
 本机忽略目录保留下载产物：`local-artifacts/cloud-global-macos-3.0.23/`。
+Android 下载产物保留于 `local-artifacts/cloud-global-android-3.0.23/`，
+云端验证日志保留于 `local-artifacts/global-platforms-android-cloud.log`。
