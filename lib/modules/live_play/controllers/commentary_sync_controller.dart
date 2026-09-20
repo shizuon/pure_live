@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:rxdart/rxdart.dart' show BehaviorSubject;
+
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/modules/live_play/service/stream_source_resolver.dart';
 import 'package:pure_live/modules/live_play/service/commentary_sync_math.dart';
@@ -14,7 +16,8 @@ import 'package:pure_live/player/interface/unified_player_interface.dart';
 import 'package:pure_live/player/models/player_engine.dart';
 import 'package:pure_live/player/models/player_slot.dart';
 
-class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlaybackReloadDelegate {
+class CommentarySyncController
+    implements LiveAudioControlDelegate, PrimaryPlaybackReloadDelegate, LiveAudioSessionState {
   CommentarySyncController({
     required this.primaryManager,
     required this.playerPool,
@@ -23,6 +26,9 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   }) : resolver = resolver ?? const StreamSourceResolver(),
        _platformSupportProbe = platformSupportProbe ?? _defaultPlatformSupportProbe {
     _primaryLoadingSubscription = primaryManager.onLoading.distinct().listen(_handlePrimaryLoading);
+    _sessionPlaying = BehaviorSubject.seeded(primaryManager.isPlayingNow);
+    _primaryPlayingSubscription = primaryManager.onPlaying.listen((_) => _publishSessionPlaying());
+    _sessionStateWorker = ever<CommentarySyncState>(state, (_) => _publishSessionPlaying());
   }
 
   static bool _defaultPlatformSupportProbe() => CommentaryPlatformSupport.isSupported;
@@ -45,6 +51,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   SyncCapablePlayer? _companionSync;
   SyncCapablePlayer? _primarySync;
   ResolvedCommentarySource? _source;
+  String? _preferredQualityId;
   int _generation = 0;
   int _consecutiveDriftSamples = 0;
   int _appliedOffsetMs = 0;
@@ -60,10 +67,10 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   bool _stoppingPrimary = false;
   bool _primaryReloading = false;
   bool _primaryWasBuffering = false;
-  bool _bufferFallbackActive = false;
   bool _handlingCompanionFailure = false;
   bool _commentaryAudioSelected = false;
   bool _previewTrackChanging = false;
+  bool _companionVideoEnabled = true;
   bool _previewBeforeCrop = false;
   Future<void> _videoTransitionTail = Future<void>.value();
   int _audioTransitionEpoch = 0;
@@ -74,11 +81,38 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   Completer<void>? _offsetDelayCancellation;
   final List<StreamSubscription<dynamic>> _companionSubscriptions = [];
   late final StreamSubscription<bool> _primaryLoadingSubscription;
+  late final StreamSubscription<bool> _primaryPlayingSubscription;
+  late final BehaviorSubject<bool> _sessionPlaying;
+  late final Worker _sessionStateWorker;
+  int _transportRevision = 0;
+  int _volumeRevision = 0;
+
+  @override
+  int get transportRevision => _transportRevision;
+  @override
+  int get volumeRevision => _volumeRevision;
+  @override
+  bool get sessionPlaying =>
+      !_stoppingPrimary &&
+      (isEngaged
+          ? !_transportPausedByUser &&
+                (primaryManager.isPlayingNow ||
+                    (_companion?.isPlayingNow ?? false) ||
+                    state.value.status == CommentarySyncStatus.calibrating)
+          : primaryManager.isPlayingNow);
+  @override
+  Stream<bool> get sessionPlayingStream => _sessionPlaying.stream.distinct();
+  @override
+  double get sessionVolume => isEngaged ? state.value.outputVolume : primaryManager.outputVolume;
+
+  void _publishSessionPlaying() {
+    if (!_disposed && !_sessionPlaying.isClosed) _sessionPlaying.add(sessionPlaying);
+  }
 
   bool get isSupported => _platformSupportProbe();
   bool get isEngaged => state.value.isEngaged;
   bool get isActive => state.value.isActive;
-  bool get isPlaying => primaryManager.isPlayingNow;
+  bool get isPlaying => sessionPlaying;
   double get outputVolume => state.value.outputVolume;
   UnifiedPlayer? get companionPreviewPlayer => _companion;
 
@@ -89,11 +123,9 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     if (videoRoom == audioRoom) {
       throw StateError('Video and commentary rooms must be different');
     }
-    if (primaryManager.currentPlayer is! SyncCapablePlayer) {
-      throw StateError('The current player does not support synchronization');
-    }
-
     await exit();
+    _transportRevision++;
+    _volumeRevision++;
     final generation = ++_generation;
     _source?.candidates.cancel();
     _manualStop = false;
@@ -111,6 +143,8 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     );
 
     try {
+      if (!await primaryManager.acquireCommentaryEngine(room: videoRoom, volume: volume)) return;
+      if (generation != _generation || _manualStop) return;
       if (!await _resolveSource(audioRoom, generation)) return;
       state.value = state.value.copyWith(audioRoom: _source!.room);
       await _openAvailableCandidate(generation: generation);
@@ -124,13 +158,14 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   }
 
   Future<bool> _resolveSource(LiveRoom room, int generation) async {
-    final source = await resolver.resolveCommentary(room);
+    final source = await resolver.resolveCommentary(room, preferredQualityId: _preferredQualityId);
     if (generation != _generation || _manualStop) {
       source.candidates.cancel();
       return false;
     }
     _source?.candidates.cancel();
     _source = source;
+    state.value = state.value.copyWith(qualities: source.qualities);
     return true;
   }
 
@@ -156,6 +191,10 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
         if (!await _waitForAudioTrack()) {
           throw StateError('No audio track in commentary stream');
         }
+        state.value = state.value.copyWith(
+          qualityId: candidate.quality.selectionId.toString(),
+          qualityLabel: candidate.quality.quality,
+        );
         return;
       } catch (error) {
         if (generation != _generation || _manualStop) return;
@@ -171,11 +210,12 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     _companion = await playerPool.getPlayer(
       PlayerEngine.mediaKit,
       slot: PlayerSlot.commentaryAudio,
-      // B uses its lowest-quality video track for the calibration preview.
-      // It is still a separate player and only its audio is sent to output.
+      // Resolve readable video before calibration. Preview and crop use this
+      // same source without reopening or changing tracks afterwards.
       audioOnly: false,
     );
     _companionSync = _companion as SyncCapablePlayer;
+    _companionVideoEnabled = true;
     _bindCompanionEvents(_companion!);
   }
 
@@ -190,6 +230,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   }
 
   void _bindCompanionEvents(UnifiedPlayer player) {
+    _companionSubscriptions.add(player.onPlaying.listen((_) => _publishSessionPlaying()));
     _companionSubscriptions.add(
       player.onError.listen((_) {
         if (isActive && !_manualStop) unawaited(_handleCompanionFailure());
@@ -202,11 +243,11 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     );
     _companionSubscriptions.add(
       player.onLoading.distinct().listen((loading) {
-        if (_manualStop || _previewTrackChanging) return;
+        if (_manualStop || _previewTrackChanging || _offsetWork != null || _transportPausedByUser) return;
         if (loading && isActive) {
           unawaited(_handleCompanionBuffering());
-        } else if (!loading && _bufferFallbackActive) {
-          unawaited(_recoverFromCompanionBuffering());
+        } else if (!loading) {
+          _cancelBufferRecovery();
         }
       }),
     );
@@ -297,6 +338,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     final target = CommentarySyncMath.clampOffset(requestedOffsetMs, minimum: minOffsetMs, maximum: maxOffsetMs);
     _requestedOffsetMs = target;
     state.value = state.value.copyWith(status: CommentarySyncStatus.calibrating, offsetMs: target);
+    _cancelBufferRecovery();
     final running = _offsetWork;
     if (running != null) return running;
     final work = _drainOffsetRequests();
@@ -331,6 +373,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
         if (pending && !_transportPausedByUser && primaryManager.isPlayingNow && (_companion?.isPlayingNow ?? false)) {
           unawaited(setOffset(_requestedOffsetMs));
         }
+        _checkCompanionBuffering();
       }
     }
   }
@@ -352,7 +395,10 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
       if (identical(_offsetDelayCancellation, cancellation)) {
         _offsetDelayCancellation = null;
       }
-      if (!_transportPausedByUser && !_stoppingPrimary) {
+      final ownsPrimary = identical(player, primaryManager.currentPlayer);
+      if (((generation == _generation && !_manualStop) || ownsPrimary) &&
+          !_transportPausedByUser &&
+          !_stoppingPrimary) {
         await player.play();
       }
     }
@@ -370,7 +416,8 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   Future<void> finishCalibrationPreview() async {
     if (!isEngaged) return;
     state.value = state.value.copyWith(previewVisible: false, message: '校准画面已隐藏，可随时再次校准');
-    await _setCompanionVideoEnabled(state.value.needsCompanionVideo);
+    // Hiding the UI must not disable/re-enable the live decoder: mpv may
+    // reacquire a new keyframe/timeline and emit buffering on vid changes.
   }
 
   Future<void> beginOverlayCrop() async {
@@ -383,7 +430,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   Future<void> cancelOverlayCrop() async {
     if (!isEngaged || !state.value.overlayEditing) return;
     state.value = state.value.copyWith(overlayEditing: false, previewVisible: _previewBeforeCrop);
-    await _setCompanionVideoEnabled(state.value.needsCompanionVideo);
+    await _setCompanionVideoEnabled(true);
   }
 
   Future<void> confirmOverlayCrop(Rect crop) async {
@@ -400,12 +447,26 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   Future<void> disableOverlay() async {
     if (!isEngaged) return;
     state.value = state.value.copyWith(overlayEnabled: false, overlayEditing: false);
-    await _setCompanionVideoEnabled(state.value.needsCompanionVideo);
+    await _setCompanionVideoEnabled(true);
   }
 
   void updateOverlayLayout(CommentaryOverlayLayout layout) {
     if (!state.value.overlayEnabled || !CommentaryOverlayLayout.validCrop(layout.crop)) return;
     state.value = state.value.copyWith(overlayLayout: layout);
+  }
+
+  Future<void> selectQuality(String qualityId) async {
+    if (!isActive ||
+        qualityId == state.value.qualityId ||
+        !state.value.qualities.any((q) => q.selectionId.toString() == qualityId)) {
+      return;
+    }
+    _preferredQualityId = qualityId;
+    // A different rendition can have different CDN latency. This is an
+    // explicit user operation, never an implicit consequence of cropping.
+    _requestedOffsetMs = 0;
+    await resync();
+    if (isActive) state.value = state.value.copyWith(message: '画质已更换，请重新核对时间；裁剪和开关预览不会再换流');
   }
 
   Future<void> _setCompanionVideoEnabled(bool enabled) {
@@ -414,9 +475,11 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     // Serialize rapid preview/overlay toggles; never drop the last requested mode.
     _videoTransitionTail = _videoTransitionTail.then((_) async {
       if (companion == null || companion != _companion || generation != _generation) return;
+      if (_companionVideoEnabled == enabled) return;
       _previewTrackChanging = true;
       try {
         await companion.setAudioOnly(!enabled).timeout(const Duration(seconds: 5));
+        _companionVideoEnabled = enabled;
       } catch (_) {
         if (generation == _generation) {
           state.value = state.value.copyWith(message: 'B 画面切换失败，可重试或更换解说源；声音保持不变');
@@ -491,7 +554,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   }
 
   void _handlePrimaryLoading(bool loading) {
-    if (!isActive || _primaryReloading) return;
+    if (!isActive || _primaryReloading || _offsetWork != null || _transportPausedByUser) return;
     if (loading) {
       _primaryWasBuffering = true;
       _consecutiveDriftSamples = 0;
@@ -511,7 +574,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     } catch (_) {
       return;
     }
-    if (generation != _generation || !isActive || _primaryReloading) return;
+    if (generation != _generation || !isActive || _primaryReloading || _offsetWork != null) return;
     final video = _primarySync;
     final audio = _companionSync;
     if (video == null || audio == null) return;
@@ -571,42 +634,33 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     _companionRate = rate;
   }
 
+  void _checkCompanionBuffering() {
+    // A real stall may start during an intentional pause and emit no new
+    // loading event afterwards. Re-check once transport resumes.
+    if (_companionSync?.isBufferingNow ?? false) {
+      unawaited(_handleCompanionBuffering());
+    } else {
+      _cancelBufferRecovery();
+    }
+  }
+
   Future<void> _handleCompanionBuffering() async {
-    if (_manualStop || !isActive || _bufferFallbackActive) return;
+    if (_manualStop || !isActive || _bufferReconnectTimer != null || _offsetWork != null || _transportPausedByUser) {
+      return;
+    }
     final generation = _generation;
-    _bufferFallbackActive = true;
-    _driftTimer?.cancel();
-    _cancelOffsetDelay();
-    await _setCompanionRate(1);
-    await _restorePrimaryAudio();
-    if (generation != _generation || _manualStop) return;
-    state.value = state.value.copyWith(status: CommentarySyncStatus.reconnecting, message: '解说源缓冲中，已临时恢复原直播声音');
-    _bufferReconnectTimer?.cancel();
+    // Pausing for calibration and waking a video surface both produce native
+    // buffering notifications. A short transition is not a lost connection.
     _bufferReconnectTimer = Timer(_bufferReconnectThreshold, () {
-      if (generation == _generation && _bufferFallbackActive) {
-        _bufferFallbackActive = false;
+      _bufferReconnectTimer = null;
+      if (generation == _generation &&
+          !_manualStop &&
+          !_transportPausedByUser &&
+          _offsetWork == null &&
+          (_companionSync?.isBufferingNow ?? false)) {
         unawaited(_handleCompanionFailure(allowReconnecting: true));
       }
     });
-  }
-
-  Future<void> _recoverFromCompanionBuffering() async {
-    if (!_bufferFallbackActive || _manualStop) return;
-    final generation = _generation;
-    _bufferReconnectTimer?.cancel();
-    _bufferReconnectTimer = null;
-    try {
-      await _finishActivation(generation: generation, targetOffsetMs: _requestedOffsetMs);
-      if (generation == _generation) {
-        _bufferFallbackActive = false;
-        state.value = state.value.copyWith(message: '解说源已恢复，请确认同步');
-      }
-    } catch (_) {
-      if (generation == _generation && !_manualStop) {
-        _bufferFallbackActive = false;
-        await _handleCompanionFailure(allowReconnecting: true);
-      }
-    }
   }
 
   Future<void> _handleCompanionFailure({bool allowReconnecting = false}) async {
@@ -638,9 +692,6 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
           await _openAvailableCandidate(generation: generation);
           await _finishAvailableCandidate(generation: generation, targetOffsetMs: _requestedOffsetMs);
           if (generation != _generation || _manualStop) return;
-          if (!state.value.needsCompanionVideo) {
-            await _setCompanionVideoEnabled(false);
-          }
           state.value = state.value.copyWith(message: '解说源已恢复，请确认同步');
           return;
         } catch (_) {
@@ -719,6 +770,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   }
 
   Future<void> setOutputVolume(double volume) async {
+    _volumeRevision++;
     final safeVolume = volume.clamp(0.0, 1.0).toDouble();
     state.value = state.value.copyWith(outputVolume: safeVolume);
     if (isActive && _companion != null) {
@@ -737,7 +789,9 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
 
   @override
   Future<void> play() async {
+    _transportRevision++;
     _transportPausedByUser = false;
+    _publishSessionPlaying();
     if (isEngaged && _companion != null) {
       await Future.wait([primaryManager.resume(), _companion!.play()]);
     } else {
@@ -746,11 +800,14 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     if (isActive && _requestedOffsetMs != _appliedOffsetMs) {
       await setOffset(_requestedOffsetMs);
     }
+    _checkCompanionBuffering();
   }
 
   @override
   Future<void> pause() async {
+    _transportRevision++;
     _transportPausedByUser = true;
+    _publishSessionPlaying();
     _cancelOffsetDelay();
     await _setCompanionRate(1);
     if (isEngaged && _companion != null) {
@@ -764,6 +821,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
 
   @override
   Future<void> stop() async {
+    _transportRevision++;
     _stoppingPrimary = true;
     try {
       await exit(restorePrimary: false);
@@ -779,7 +837,10 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   }
 
   Future<void> _exit({required bool restorePrimary}) async {
+    _transportRevision++;
+    _volumeRevision++;
     _manualStop = true;
+    primaryManager.releaseCommentaryEngine();
     _generation++;
     _source?.candidates.cancel();
     _driftTimer?.cancel();
@@ -790,6 +851,7 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     if (restorePrimary && state.value.isEngaged) await _restorePrimaryAudio();
     await _disposeCompanion();
     _source = null;
+    _preferredQualityId = null;
     _primarySync = null;
     _appliedOffsetMs = 0;
     _requestedOffsetMs = 0;
@@ -807,7 +869,6 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
   void _cancelBufferRecovery() {
     _bufferReconnectTimer?.cancel();
     _bufferReconnectTimer = null;
-    _bufferFallbackActive = false;
   }
 
   void _cancelOffsetDelay() {
@@ -841,6 +902,9 @@ class CommentarySyncController implements LiveAudioControlDelegate, PrimaryPlayb
     await exit();
     _disposed = true;
     await _primaryLoadingSubscription.cancel();
+    await _primaryPlayingSubscription.cancel();
+    _sessionStateWorker.dispose();
+    await _sessionPlaying.close();
     state.close();
   }
 }

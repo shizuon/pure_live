@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:developer';
 
+import 'package:pure_live/model/live_play_quality.dart';
+
 import 'video_controller_panel.dart';
 
 import 'package:flutter/scheduler.dart';
@@ -277,6 +279,7 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
   final bool allowFullScreen;
   final Map<String, String> headers;
   final String qualiteName;
+  final LivePlayQuality? recoveryQuality;
   final int currentLineIndex;
   final int currentQuality;
   final RxBool audioOnlyState;
@@ -372,6 +375,7 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
     required this.headers,
     required this.playUrs,
     required this.qualiteName,
+    this.recoveryQuality,
     required this.currentLineIndex,
     required this.currentQuality,
     required bool isAudioOnly,
@@ -481,6 +485,8 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
       room: room,
       audioOnly: isAudioOnly,
       startMuted: commentary.isActive,
+      quality: recoveryQuality,
+      qualityIndex: currentQuality,
     );
   }
 

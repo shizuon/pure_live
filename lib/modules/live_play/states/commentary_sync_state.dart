@@ -1,4 +1,5 @@
 import 'package:pure_live/common/models/live_room.dart';
+import 'package:pure_live/model/live_play_quality.dart';
 
 import 'commentary_overlay_layout.dart';
 
@@ -16,6 +17,9 @@ class CommentarySyncState {
     this.overlayEditing = false,
     this.overlayLayout = const CommentaryOverlayLayout(),
     this.message,
+    this.qualities = const [],
+    this.qualityId,
+    this.qualityLabel,
   });
 
   final CommentarySyncStatus status;
@@ -29,6 +33,9 @@ class CommentarySyncState {
   final CommentaryOverlayLayout overlayLayout;
   bool get needsCompanionVideo => previewVisible || overlayEnabled || overlayEditing;
   final String? message;
+  final List<LivePlayQuality> qualities;
+  final String? qualityId;
+  final String? qualityLabel;
 
   bool get isEngaged => status != CommentarySyncStatus.inactive;
   bool get isActive => status == CommentarySyncStatus.active || status == CommentarySyncStatus.calibrating;
@@ -49,6 +56,9 @@ class CommentarySyncState {
     CommentaryOverlayLayout? overlayLayout,
     String? message,
     bool clearMessage = false,
+    List<LivePlayQuality>? qualities,
+    String? qualityId,
+    String? qualityLabel,
   }) {
     return CommentarySyncState(
       status: status ?? this.status,
@@ -61,6 +71,9 @@ class CommentarySyncState {
       overlayEditing: overlayEditing ?? this.overlayEditing,
       overlayLayout: overlayLayout ?? this.overlayLayout,
       message: clearMessage ? null : message ?? this.message,
+      qualities: qualities ?? this.qualities,
+      qualityId: qualityId ?? this.qualityId,
+      qualityLabel: qualityLabel ?? this.qualityLabel,
     );
   }
 }

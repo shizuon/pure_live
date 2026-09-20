@@ -1,9 +1,9 @@
 {
-  "version": "3.0.20",
-  "build_number": 4108,
-  "version_num": 300204108,
+  "version": "3.0.21",
+  "build_number": 4109,
+  "version_num": 300214109,
   "android_abis": [],
-  "version_desc": "3.0.20 Mac 测试版：新增软解、硬解 only、硬解兼容三档及 A/B 实际解码状态；修改模式需重启，默认仍为软解。",
+  "version_desc": "3.0.21 Mac 测试版：连续校准与裁剪保持 B 播放时间线，默认高清并可选 B 画质；加入直播地址恢复与双流音频会话基础，保留三档解码。",
   "prerelease": true,
   "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
   "platforms": {
@@ -34,10 +34,10 @@
       "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
     },
     "macos": {
-      "version": "3.0.20",
-      "build_number": 4108,
-      "version_num": 300204108,
-      "version_desc": "3.0.20 Mac 测试版：新增软解、硬解 only、硬解兼容三档及 A/B 实际解码状态；修改模式需重启，默认仍为软解。",
+      "version": "3.0.21",
+      "build_number": 4109,
+      "version_num": 300214109,
+      "version_desc": "3.0.21 Mac 测试版：连续校准与裁剪保持 B 播放时间线，默认高清并可选 B 画质；加入直播地址恢复与双流音频会话基础，保留三档解码。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },

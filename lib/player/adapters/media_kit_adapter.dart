@@ -208,7 +208,7 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
       // =========================
       _controller = PlatformUtils.isMacOS
           ? VideoController(_player, configuration: SettingsService.to.player.activeMacosDecodeMode.configuration())
-          : SettingsService.to.player.playerCompatMode.v
+          : PlatformUtils.isAndroid && SettingsService.to.player.playerCompatMode.v
           ? VideoController(
               _player,
               configuration: const VideoControllerConfiguration(vo: 'mediacodec_embed', hwdec: 'mediacodec'),

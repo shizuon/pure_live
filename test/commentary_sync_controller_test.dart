@@ -8,6 +8,7 @@ import 'package:pure_live/common/models/live_room.dart';
 import 'package:pure_live/model/live_play_quality.dart';
 import 'package:pure_live/modules/live_play/controllers/commentary_sync_controller.dart';
 import 'package:pure_live/modules/live_play/service/stream_source_resolver.dart';
+import 'package:pure_live/modules/live_play/service/commentary_quality_policy.dart';
 import 'package:pure_live/modules/live_play/states/commentary_sync_state.dart';
 import 'package:pure_live/modules/live_play/widgets/commentary_video_overlay.dart';
 import 'package:pure_live/player/core/engine_fallback_manager.dart';
@@ -22,6 +23,136 @@ import 'package:pure_live/player/models/player_state.dart';
 import 'package:rxdart/rxdart.dart' show BehaviorSubject;
 
 void main() {
+  test(
+    'rapid offsets and native pause buffering do not reopen B; cropping keeps calibration and video track',
+    () async {
+      final opened = <String>[];
+      final primary = _SyncPlayer(position: const Duration(seconds: 30), simulatePauseBuffering: true);
+      final companion = _SyncPlayer(
+        position: const Duration(seconds: 27),
+        simulatePauseBuffering: true,
+        onOpen: opened.add,
+      );
+      final pool = PlayerPool(factory: (_) async => companion);
+      final controller = CommentarySyncController(
+        primaryManager: _PlayerManager(primary: primary, pool: pool),
+        playerPool: pool,
+        platformSupportProbe: () => true,
+        resolver: const _Resolver(),
+      );
+      addTearDown(controller.dispose);
+      await controller.activate(
+        videoRoom: LiveRoom(roomId: 'a', platform: 'test'),
+        audioRoom: LiveRoom(roomId: 'b', platform: 'test'),
+        primaryVolume: .6,
+      );
+      await Future.wait(List.generate(8, (_) => controller.adjustOffset(500)));
+      expect(controller.state.value.offsetMs, 4000);
+      expect(controller.isActive, isTrue);
+      await Future.wait(List.generate(5, (_) => controller.adjustOffset(-100)));
+      expect(controller.state.value.offsetMs, 3500);
+      await controller.finishCalibrationPreview();
+      await controller.beginOverlayCrop();
+      await controller.confirmOverlayCrop(const Rect.fromLTWH(.6, .5, .3, .4));
+      await controller.disableOverlay();
+      await controller.showCalibrationPreview();
+      expect(controller.state.value.offsetMs, 3500);
+      expect(opened, hasLength(1), reason: 'calibration and crop must reuse the exact live timeline');
+      expect(controller.companionPreviewPlayer, same(companion));
+      expect(companion.audioOnlyModes, isEmpty, reason: 'foreground presentation does not toggle vid');
+      expect(companion.disposed, isFalse);
+    },
+    timeout: const Timeout(Duration(seconds: 15)),
+  );
+
+  test('short B buffering preserves offset; sustained buffering still reconnects', () async {
+    final opened = <String>[];
+    final primary = _SyncPlayer(position: const Duration(seconds: 30));
+    final companions = <_SyncPlayer>[];
+    final pool = PlayerPool(
+      factory: (_) async {
+        final player = _SyncPlayer(position: const Duration(seconds: 27), onOpen: opened.add);
+        companions.add(player);
+        return player;
+      },
+    );
+    final manager = _PlayerManager(primary: primary, pool: pool);
+    final controller = CommentarySyncController(
+      primaryManager: manager,
+      playerPool: pool,
+      platformSupportProbe: () => true,
+      resolver: const _Resolver(),
+    );
+    addTearDown(controller.dispose);
+    await controller.activate(
+      videoRoom: LiveRoom(roomId: 'a', platform: 'test'),
+      audioRoom: LiveRoom(roomId: 'b', platform: 'test'),
+      primaryVolume: .6,
+    );
+    await controller.adjustOffset(100);
+    final companion = companions.single;
+    final pauses = companion.pauseCount;
+    companion._loading.add(true);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    companion._loading.add(false);
+    // Let the former reconnect threshold expire to catch uncancelled timers.
+    await Future<void>.delayed(const Duration(milliseconds: 3100));
+    expect(opened, hasLength(1));
+    expect(controller.state.value.offsetMs, 100);
+    expect(companion.pauseCount, pauses, reason: 'do not reapply offset after short buffering');
+    expect(manager.lastVolume, 0);
+    final reconnecting = controller.state.stream.firstWhere((s) => s.status == CommentarySyncStatus.reconnecting);
+    companion._loading.add(true);
+    await reconnecting.timeout(const Duration(seconds: 5));
+    expect(manager.lastVolume, .6, reason: 'real stall must restore A');
+    final recovered = controller.state.stream.firstWhere(
+      (s) => s.status == CommentarySyncStatus.active && s.message == '解说源已恢复，请确认同步',
+    );
+    await recovered.timeout(const Duration(seconds: 6));
+    expect(opened, hasLength(2));
+    expect(companion.disposed, isTrue);
+    expect(controller.state.value.offsetMs, 100);
+  }, timeout: const Timeout(Duration(seconds: 18)));
+
+  test('manual B quality uses the selected rendition and resets calibration only on explicit change', () async {
+    final opened = <String>[];
+    final primary = _SyncPlayer(position: const Duration(seconds: 30));
+    final pool = PlayerPool(
+      factory: (_) async => _SyncPlayer(position: const Duration(seconds: 27), onOpen: opened.add),
+    );
+    final resolver = _QualityResolver();
+    final controller = CommentarySyncController(
+      primaryManager: _PlayerManager(primary: primary, pool: pool),
+      playerPool: pool,
+      platformSupportProbe: () => true,
+      resolver: resolver,
+    );
+    addTearDown(controller.dispose);
+    await controller.activate(
+      videoRoom: LiveRoom(roomId: 'a', platform: 'test'),
+      audioRoom: LiveRoom(roomId: 'b', platform: 'test'),
+      primaryVolume: .6,
+    );
+    expect(controller.state.value.qualityLabel, '蓝光4M');
+    await controller.adjustOffset(100);
+    await controller.selectQuality('missing');
+    await controller.selectQuality('4m');
+    expect(opened, ['4m']);
+    expect(controller.state.value.offsetMs, 100);
+    await controller.selectQuality('8m');
+    expect(resolver.selections, [null, '8m']);
+    expect(opened, ['4m', '8m']);
+    expect(controller.state.value.qualityLabel, '蓝光8M');
+    expect(controller.state.value.offsetMs, 0);
+    expect(controller.state.value.previewVisible, isTrue);
+    await controller.adjustOffset(-100);
+    await controller.finishCalibrationPreview();
+    await controller.beginOverlayCrop();
+    await controller.confirmOverlayCrop(const Rect.fromLTWH(.5, .5, .3, .3));
+    expect(opened, ['4m', '8m']);
+    expect(controller.state.value.offsetMs, -100);
+  });
+
   test('replacing B during stable-playback wait cannot dispose the new player', () async {
     final stableCheckEntered = Completer<void>();
     final newPlayerOpened = Completer<void>();
@@ -203,6 +334,10 @@ void main() {
     expect(manager.lastVolume, 0);
     expect(companion.lastVolume, 0.6);
 
+    final sessionEvents = <bool>[];
+    final sessionSubscription = controller.sessionPlayingStream.listen(sessionEvents.add);
+    addTearDown(sessionSubscription.cancel);
+
     await controller.adjustOffset(10);
     expect(companion.pauseCount, 1, reason: 'positive offset delays B');
     expect(primary.pauseCount, 0);
@@ -210,6 +345,11 @@ void main() {
     await controller.adjustOffset(-20);
     expect(primary.pauseCount, 1, reason: 'negative offset advances B');
     expect(controller.state.value.offsetMs, -10);
+    expect(sessionEvents, isNot(contains(false)), reason: 'calibration must not stop the OS media session');
+    await controller.pause();
+    expect(controller.sessionPlaying, isFalse);
+    await controller.play();
+    expect(controller.sessionPlaying, isTrue);
 
     await controller.finishCalibrationPreview();
     expect(controller.state.value.previewVisible, isFalse);
@@ -232,13 +372,13 @@ void main() {
     await controller.confirmOverlayCrop(const Rect.fromLTWH(0.7, 0.6, 0.2, 0.3));
     expect(controller.state.value.overlayEnabled, isTrue);
     expect(controller.state.value.previewVisible, isFalse);
-    expect(companion.audioOnlyModes.last, isFalse);
+    expect(companion.audioOnlyModes, isEmpty);
     await controller.showCalibrationPreview();
     await controller.finishCalibrationPreview();
-    expect(companion.audioOnlyModes.last, isFalse, reason: 'finishing calibration must preserve the face overlay');
+    expect(companion.audioOnlyModes, isEmpty, reason: 'finishing calibration must preserve the face overlay');
     expect(controller.state.value.offsetMs, -10);
     await controller.disableOverlay();
-    expect(companion.audioOnlyModes.last, isTrue);
+    expect(companion.audioOnlyModes, isEmpty, reason: 'hiding B must not reset its calibrated video timeline');
     expect(companion.lastVolume, 0.6, reason: 'closing the face must preserve B audio');
 
     // Rapid UI toggles must not drop the final video-enabled request.
@@ -247,7 +387,7 @@ void main() {
       controller.finishCalibrationPreview(),
       controller.showCalibrationPreview(),
     ]);
-    expect(companion.audioOnlyModes.last, isFalse);
+    expect(companion.audioOnlyModes, isEmpty);
 
     await Future.wait([controller.exit(), controller.dispose(), controller.dispose()]);
     expect(manager.lastVolume, 0.6);
@@ -288,7 +428,7 @@ void main() {
     await controller.finishCalibrationPreview();
     expect(controller.state.value.overlayEnabled, isTrue);
     expect(controller.state.value.overlayLayout.crop, crop);
-    expect(companions.last.audioOnlyModes.last, isFalse);
+    expect(companions.last.audioOnlyModes, isEmpty);
     expect(companions.first.disposed, isTrue);
     await controller.activate(
       videoRoom: videoRoom,
@@ -485,7 +625,7 @@ class _Resolver extends StreamSourceResolver {
   const _Resolver();
 
   @override
-  Future<ResolvedCommentarySource> resolveCommentary(LiveRoom selectedRoom) {
+  Future<ResolvedCommentarySource> resolveCommentary(LiveRoom selectedRoom, {String? preferredQualityId}) {
     final quality = LivePlayQuality(quality: '流畅');
     return Future.value(
       ResolvedCommentarySource(
@@ -504,11 +644,35 @@ class _Resolver extends StreamSourceResolver {
   }
 }
 
+class _QualityResolver extends StreamSourceResolver {
+  final selections = <String?>[];
+  @override
+  Future<ResolvedCommentarySource> resolveCommentary(LiveRoom room, {String? preferredQualityId}) async {
+    selections.add(preferredQualityId);
+    final qualities = [
+      LivePlayQuality(quality: '蓝光8M', id: '8m'),
+      LivePlayQuality(quality: '蓝光4M', id: '4m'),
+      LivePlayQuality(quality: '流畅', id: 'low'),
+    ];
+    return ResolvedCommentarySource(
+      room: room,
+      qualities: qualities,
+      candidates: StreamSourceResolver.buildCandidates(
+        room: room,
+        qualities: qualities,
+        headers: const {},
+        preferredOrder: CommentaryQualityPolicy.order(qualities, preferredId: preferredQualityId),
+        getPlayUrls: (quality) async => [quality.selectionId.toString()],
+      ),
+    );
+  }
+}
+
 class _SourceResolver extends StreamSourceResolver {
   _SourceResolver(this.resolve);
   final Future<ResolvedCommentarySource> Function(LiveRoom) resolve;
   @override
-  Future<ResolvedCommentarySource> resolveCommentary(LiveRoom room) => resolve(room);
+  Future<ResolvedCommentarySource> resolveCommentary(LiveRoom room, {String? preferredQualityId}) => resolve(room);
 }
 
 class _PlayerManager extends PlayerManager {
@@ -533,6 +697,9 @@ class _PlayerManager extends PlayerManager {
   UnifiedPlayer? get currentPlayer => primary;
 
   @override
+  Future<bool> acquireCommentaryEngine({required LiveRoom room, required double volume}) async => true;
+
+  @override
   bool get isPlayingNow => primary.isPlayingNow;
 
   @override
@@ -555,16 +722,21 @@ class _PlayerManager extends PlayerManager {
   Future<void> resume() => primary.play();
 
   @override
+  Future<void> replay({bool? startMuted}) => primary.play();
+
+  @override
   void setMutedForFutureReloads(bool muted) {
     mutedForReloads = muted;
   }
 }
 
 class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer {
-  _SyncPlayer({required Duration position, this.onOpen, this.onBufferingRead}) : _currentPosition = position;
+  _SyncPlayer({required Duration position, this.onOpen, this.onBufferingRead, this.simulatePauseBuffering = false})
+    : _currentPosition = position;
 
   final void Function(String)? onOpen;
   final VoidCallback? onBufferingRead;
+  final bool simulatePauseBuffering;
 
   final Duration _currentPosition;
   final BehaviorSubject<bool> _playing = BehaviorSubject.seeded(true);
@@ -598,11 +770,15 @@ class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer {
   }
 
   @override
-  Future<void> play() async => _playing.add(true);
+  Future<void> play() async {
+    if (simulatePauseBuffering) _loading.add(false);
+    _playing.add(true);
+  }
 
   @override
   Future<void> pause() async {
     pauseCount++;
+    if (simulatePauseBuffering) _loading.add(true);
     _playing.add(false);
   }
 

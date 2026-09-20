@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:pure_live/player/widgets/stable_player_video.dart';
+
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/common/widgets/common_avatar.dart';
 import 'package:pure_live/modules/live_play/controllers/danmaku_controller.dart';
@@ -159,6 +161,33 @@ class CommentarySyncDialog extends StatelessWidget {
               Text('${i18n('commentary_video')}: ${state.videoRoom?.nick ?? '-'}'),
               const SizedBox(height: 4),
               Text('${i18n('commentary_audio')}: ${state.audioRoom?.nick ?? '-'}'),
+              if (state.qualities.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  key: ValueKey('commentary-quality-${state.qualityId}'),
+                  initialValue: state.qualities.any((q) => q.selectionId.toString() == state.qualityId)
+                      ? state.qualityId
+                      : null,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'B 解说画质（校准和覆盖共用）'),
+                  items: state.qualities
+                      .map(
+                        (q) => DropdownMenuItem(
+                          value: q.selectionId.toString(),
+                          child: Text(q.quality, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: state.isActive
+                      ? (id) async {
+                          if (id == null || id == state.qualityId) return;
+                          Navigator.pop(context);
+                          await sync.selectQuality(id);
+                        }
+                      : null,
+                ),
+                const Text('默认优先蓝光 4M / 8M 或同级高清。手动换画质会重新开流，需重新校准；裁剪不会换流。'),
+              ],
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 icon: const Icon(Icons.crop),
@@ -367,14 +396,14 @@ class CommentaryCalibrationPreview extends StatelessWidget {
                   aspectRatio: 16 / 9,
                   child: ColoredBox(
                     color: Colors.black,
-                    child:
-                        previewPlayer?.getVideoWidget(BoxFit.contain) ??
-                        Center(
-                          child: Text(
-                            i18n('commentary_preview_loading'),
-                            style: const TextStyle(color: Colors.white70),
+                    child: previewPlayer != null
+                        ? StablePlayerVideo(key: ObjectKey(previewPlayer), player: previewPlayer)
+                        : Center(
+                            child: Text(
+                              i18n('commentary_preview_loading'),
+                              style: const TextStyle(color: Colors.white70),
+                            ),
                           ),
-                        ),
                   ),
                 ),
                 Container(

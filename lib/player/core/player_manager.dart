@@ -7,6 +7,8 @@ import 'line_fallback_manager.dart';
 import '../models/player_state.dart';
 import '../models/player_engine.dart';
 import 'engine_fallback_manager.dart';
+import 'live_playback_recovery.dart';
+import 'live_source_refresher.dart';
 
 import 'package:floating/floating.dart';
 import 'package:flutter/scheduler.dart';
@@ -21,6 +23,7 @@ import 'package:rxdart/rxdart.dart' hide Rx;
 import 'package:pure_live/common/index.dart';
 
 import '../interface/unified_player_interface.dart';
+import '../interface/sync_capable_player.dart';
 
 import 'package:pure_live/routes/app_navigation.dart';
 import 'package:pure_live/model/live_play_quality.dart';
@@ -54,6 +57,8 @@ class PlayerManager {
   final bool Function() _useHardStopOnExit;
   final Future<void> Function(UnifiedPlayer player, bool audioOnly) _audioModeServiceSync;
   final Future<void> Function(LiveRoom room) _audioSessionStart;
+  final LiveSourceRefresher _sourceRefresher;
+  late final LivePlaybackRecovery _liveRecovery;
   Future<void> _playerLifecycleQueue = Future.value();
   int _sessionId = 0;
   bool _isClosing = false;
@@ -67,7 +72,9 @@ class PlayerManager {
     bool Function()? useHardStopOnExit,
     Future<void> Function(UnifiedPlayer player, bool audioOnly)? audioModeServiceSync,
     Future<void> Function(LiveRoom room)? audioSessionStart,
+    LiveSourceRefresher? sourceRefresher,
   }) : _playerCreator = playerCreator ?? PlayerAdapterFactory.create,
+       _sourceRefresher = sourceRefresher ?? LiveSourceRefresher(),
        _useHardStopOnExit = useHardStopOnExit ?? (() => SettingsService.to.player.useHardStopOnExit.v),
        _audioModeServiceSync =
            audioModeServiceSync ?? ((player, audioOnly) => LiveAudioService.setPlayer(player, audioOnly: audioOnly)),
@@ -76,6 +83,7 @@ class PlayerManager {
            ((room) => LiveAudioService.start(room.roomId!, room.title ?? "", room.nick ?? "", room.avatar)) {
     _audioModeTransitions = LatestAsyncValueQueue<bool>(_applyAudioOnlyMode);
     _audioServiceTransitions = LatestAsyncValueQueue<_AudioServiceRequest>(_applyAudioServiceRequest);
+    _liveRecovery = LivePlaybackRecovery(reopen: _recoverLiveSource, onExhausted: _reportLiveRecoveryFailure);
     _pipStateSubscription = isInPip.listen((value) {
       GlobalPlayerState.to.isPipMode.value = value;
       if (!value && !isFloating.value && !_appFloatingPrepared) {
@@ -89,6 +97,9 @@ class PlayerManager {
   UnifiedPlayer? _currentPlayer;
   PlayerEngine? _runtimeEngine;
   PlayerEngine? _defaultEngine;
+  PlayerEngine? _sessionEngine;
+  int _engineLeaseGeneration = 0;
+  PlayerEngine? get _preferredEngine => _sessionEngine ?? _defaultEngine;
   bool _runtimeAudioOnly = false;
   bool _requestedAudioOnly = false;
   bool _nativeAudioOnly = false;
@@ -102,6 +113,13 @@ class PlayerManager {
   List<String> _currentPlayUrls = [];
   Map<String, String> _currentHeaders = {};
   bool _currentStartMuted = false;
+  bool _playbackWanted = false;
+  double _outputVolume = 1;
+  double get outputVolume => _outputVolume;
+  LivePlayQuality? _currentQuality;
+  int _currentQualityIndex = 0;
+  final _sourceRefreshes = PublishSubject<RefreshedLiveSource>();
+  Stream<RefreshedLiveSource> get onLiveSourceRefreshed => _sourceRefreshes.stream;
 
   /// Routes controls rendered by PlayerManager (floating/PiP) through the
   /// dual-stream coordinator without making primary player methods recurse.
@@ -318,8 +336,13 @@ class PlayerManager {
 
   Future<UnifiedPlayer> _createPlayer(PlayerEngine engine, {bool audioOnly = false}) async {
     final player = await _playerCreator(engine);
-    await player.init(audioOnly: audioOnly);
-    return player;
+    try {
+      await player.init(audioOnly: audioOnly);
+      return player;
+    } catch (_) {
+      await _safeDestroyPlayer(player);
+      rethrow;
+    }
   }
 
   Future<T> _enqueuePlayerLifecycle<T>(Future<T> Function() operation) {
@@ -345,7 +368,7 @@ class PlayerManager {
     _stateSubject.add(PlayerState.initializing);
 
     try {
-      _defaultEngine = engine;
+      if (_sessionEngine == null) _defaultEngine = engine;
       _runtimeEngine = engine;
 
       final player = await _createPlayer(engine, audioOnly: audioOnly);
@@ -410,7 +433,14 @@ class PlayerManager {
     bool audioOnly = false,
     bool startMuted = false,
     bool force = false,
+    LivePlayQuality? quality,
+    int? qualityIndex,
   }) {
+    if (room != currentFloatRoom) releaseCommentaryEngine();
+    // Fence a pending HTTP lookup immediately, before this command reaches the
+    // native lifecycle queue. Late recovery must never reopen a departed room.
+    _liveRecovery.startSession(enabled: _canRecoverLiveRoom(room));
+    _playbackWanted = true;
     return _enqueuePlayerLifecycle(
       () => _playInternal(
         url,
@@ -420,6 +450,8 @@ class PlayerManager {
         audioOnly: audioOnly,
         startMuted: startMuted,
         force: force,
+        quality: quality,
+        qualityIndex: qualityIndex,
       ),
     );
   }
@@ -432,6 +464,8 @@ class PlayerManager {
     bool audioOnly = false,
     bool startMuted = false,
     bool force = false,
+    LivePlayQuality? quality,
+    int? qualityIndex,
   }) async {
     if (_disposed) return;
     _audioModeVideoWarmTimer?.cancel();
@@ -441,6 +475,9 @@ class PlayerManager {
     final mySessionId = ++_sessionId;
 
     final roomChanged = room != currentFloatRoom;
+    _currentQuality = quality ?? (roomChanged ? null : _currentQuality);
+    _currentQualityIndex = qualityIndex ?? (roomChanged ? 0 : _currentQualityIndex);
+    _completeSubject.add(false);
     if (roomChanged) {
       lineManager.reset();
     }
@@ -453,13 +490,13 @@ class PlayerManager {
         _defaultEngine = PlayerConsts.engines[validKey]!;
       }
 
-      final engine = _defaultEngine!;
+      final engine = _preferredEngine!;
 
       log('No current player, initializing with default engine: $engine', name: 'PlayerManager');
 
       await _initializeInternal(engine: engine, audioOnly: audioOnly, sessionId: mySessionId);
-    } else if (_runtimeEngine != _defaultEngine && !_isSwitchingDueToFallback) {
-      await _switchEngineInternal(_defaultEngine!, isManual: false, audioOnly: audioOnly);
+    } else if (_runtimeEngine != _preferredEngine && !_isSwitchingDueToFallback) {
+      await _switchEngineInternal(_preferredEngine!, isManual: false, audioOnly: audioOnly);
     } else if (_runtimeAudioOnly != audioOnly || _requestedAudioOnly != audioOnly) {
       await setAudioOnlyMode(audioOnly);
     }
@@ -508,12 +545,15 @@ class PlayerManager {
       );
       if (!_isSessionValid(mySessionId)) return;
       _nativeAudioOnly = audioOnly;
+      // An in-flight native open may emit playing after a user pause. Its
+      // completion must honor the latest transport command.
+      if (!_playbackWanted) await player.pause();
 
       // Desktop player adapters do not all restore the per-room volume in
       // setDataSource. Apply it centrally so every engine starts consistently.
       if (PlatformUtils.isDesktop && room != null && !startMuted) {
         try {
-          await player.setVolume(room.getSavedVolume().clamp(0.0, 1.0));
+          await setVolume(room.getSavedVolume().clamp(0.0, 1.0));
         } catch (error, stackTrace) {
           // A damaged/migrating volume preference is not a playback failure.
           // Keep the already-open live stream usable and fall back to the
@@ -807,6 +847,9 @@ class PlayerManager {
 
   Future<void> _switchEngineInternal(PlayerEngine engine, {bool isManual = false, bool? audioOnly}) async {
     if (_disposed || _isClosing) return;
+    if (_sessionEngine != null && engine != _sessionEngine) {
+      throw StateError('请先退出双流解说，再切换播放器内核');
+    }
 
     if (_runtimeEngine == engine && _currentPlayer != null) {
       return;
@@ -872,6 +915,69 @@ class PlayerManager {
     }
   }
 
+  /// Prepares the synchronization backend muted while A remains audible.
+  /// The saved single-stream engine is unchanged. Only a ready replacement
+  /// takes ownership; failure/cancellation disposes it and leaves A intact.
+  Future<bool> acquireCommentaryEngine({required LiveRoom room, required double volume}) {
+    final lease = ++_engineLeaseGeneration;
+    return _enqueuePlayerLifecycle(() async {
+      bool current() => lease == _engineLeaseGeneration && !_disposed && !_isClosing && currentFloatRoom == room;
+      if (!current()) return false;
+      if (currentPlayer is SyncCapablePlayer) {
+        _sessionEngine = PlayerEngine.mediaKit;
+        return true;
+      }
+      final previous = _currentPlayer;
+      final url = _currentUrl;
+      if (previous == null || url == null) throw StateError('主画面尚未就绪');
+      UnifiedPlayer? replacement;
+      var committed = false;
+      try {
+        replacement = await _createPlayer(PlayerEngine.mediaKit);
+        if (replacement is! SyncCapablePlayer) throw StateError('播放器不支持双流同步');
+        await replacement.setVolume(0);
+        await replacement
+            .setDataSource(url, _currentPlayUrls, _currentHeaders, room: room, startMuted: true)
+            .timeout(const Duration(seconds: 15));
+        if (!replacement.isPlayingNow) {
+          await replacement.onPlaying.firstWhere((playing) => playing).timeout(const Duration(seconds: 15));
+        }
+        if (!current()) return false;
+        if (!_playbackWanted) await replacement.pause();
+        await previous.setVolume(0);
+        await replacement.setVolume(volume.clamp(0.0, 1.0));
+        if (!current()) {
+          await previous.setVolume(volume.clamp(0.0, 1.0));
+          return false;
+        }
+        _currentPlayer = replacement;
+        _runtimeEngine = PlayerEngine.mediaKit;
+        _sessionEngine = PlayerEngine.mediaKit;
+        committed = true;
+        await _bindPlayerStreams(replacement, sessionId: _sessionId);
+        videoKey.value = ValueKey('video_${DateTime.now().microsecondsSinceEpoch}');
+        videoPresentationRevision.value++;
+        _scheduleAudioServiceSync(replacement, false, room: room, sessionId: _sessionId);
+        await _safeDestroyPlayer(previous);
+        return true;
+      } finally {
+        if (!committed && replacement != null) {
+          await _safeDestroyPlayer(replacement);
+          if (identical(_currentPlayer, previous) && !_disposed && !_isClosing) {
+            await previous.setVolume(volume.clamp(0.0, 1.0));
+          }
+        }
+      }
+    });
+  }
+
+  /// Keep the currently audible A uninterrupted. Its next reload/room uses
+  /// the original saved engine again; no settings migration is required.
+  void releaseCommentaryEngine() {
+    _engineLeaseGeneration++;
+    _sessionEngine = null;
+  }
+
   Future<void> togglePlayPause() async {
     final delegate = controlDelegate;
     if (delegate != null) {
@@ -890,8 +996,25 @@ class PlayerManager {
     }
   }
 
-  Future<void> pause() async => await _currentPlayer?.pause();
-  Future<void> resume() async => await _currentPlayer?.play();
+  Future<void> pause() async {
+    _playbackWanted = false;
+    _liveRecovery.setWanted(false);
+    await _currentPlayer?.pause();
+  }
+
+  Future<void> resume() async {
+    _playbackWanted = true;
+    _liveRecovery.setWanted(true);
+    if ((_completeSubject.value || hasError.value) && _canRecoverLiveRoom(currentFloatRoom)) {
+      if (!_liveRecovery.isRecovering) {
+        _liveRecovery.startSession(enabled: true);
+        _liveRecovery.observe(playing: true);
+      }
+      _liveRecovery.request();
+      return;
+    }
+    await _currentPlayer?.play();
+  }
 
   Future<void> stop() async {
     await close();
@@ -899,7 +1022,8 @@ class PlayerManager {
   }
 
   Future<void> setVolume(double volume) async {
-    await _currentPlayer?.setVolume(volume.clamp(0.0, 1.0));
+    _outputVolume = volume.clamp(0.0, 1.0);
+    await _currentPlayer?.setVolume(_outputVolume);
   }
 
   void changeVideoFit(int index) {
@@ -1538,6 +1662,9 @@ class PlayerManager {
   }
 
   Future<void> close() {
+    releaseCommentaryEngine();
+    _playbackWanted = false;
+    _liveRecovery.setWanted(false);
     return _enqueuePlayerLifecycle(_closeInternal);
   }
 
@@ -1563,6 +1690,8 @@ class PlayerManager {
   }
 
   Future<void> softStop() async {
+    _playbackWanted = false;
+    _liveRecovery.setWanted(false);
     lineManager.reset();
     try {
       if (_stateSubject.value == PlayerState.error) {
@@ -1578,6 +1707,8 @@ class PlayerManager {
   }
 
   Future<void> _hardDisposeInternal() async {
+    _playbackWanted = false;
+    _liveRecovery.setWanted(false);
     _sessionId++;
     lineManager.reset();
     await _clearSubscriptions();
@@ -1597,7 +1728,81 @@ class PlayerManager {
     isInitialized.value = false;
   }
 
+  bool _canRecoverLiveRoom(LiveRoom? room) =>
+      room != null &&
+      room.roomId != null &&
+      room.platform != null &&
+      room.platform != Sites.iptvSite &&
+      room.isRecord != true &&
+      room.isCatchUp != true &&
+      room.liveStatus != LiveStatus.replay;
+
+  void _reportLiveRecoveryFailure(bool offline) {
+    if (_disposed || _isClosing) return;
+    hasError.value = true;
+    _errorSubject.add(PlayerException(message: offline ? '直播已结束' : '直播恢复失败，请刷新或更换线路', type: PlayerErrorType.network));
+    _stateSubject.add(PlayerState.error);
+  }
+
+  Future<LiveRecoveryResult> _recoverLiveSource(bool Function() isCurrent) async {
+    final room = currentFloatRoom;
+    final session = _sessionId;
+    if (!_canRecoverLiveRoom(room) || !isCurrent()) return LiveRecoveryResult.cancelled;
+    final RefreshedLiveSource source;
+    try {
+      source = await _sourceRefresher
+          .resolve(
+            room: room!,
+            preferredQuality: _currentQuality,
+            preferredQualityIndex: _currentQualityIndex,
+            preferredLineIndex: _currentPlayUrls
+                .indexOf(_currentUrl ?? '')
+                .clamp(0, math.max(0, _currentPlayUrls.length - 1)),
+            previousUrl: _currentUrl ?? '',
+            advanceLine: _liveRecovery.attempt > 1,
+          )
+          .timeout(const Duration(seconds: 20));
+    } on LiveSourceOffline {
+      return LiveRecoveryResult.offline;
+    } catch (_) {
+      return LiveRecoveryResult.retry;
+    }
+    if (!isCurrent() || !_isSessionValid(session)) return LiveRecoveryResult.cancelled;
+    return _enqueuePlayerLifecycle(() async {
+      if (!isCurrent() || !_isSessionValid(session)) return LiveRecoveryResult.cancelled;
+      final reloadDelegate = controlDelegate is PrimaryPlaybackReloadDelegate
+          ? controlDelegate as PrimaryPlaybackReloadDelegate
+          : null;
+      reloadDelegate?.markPrimaryReloading();
+      await _playInternal(
+        source.url,
+        source.urls,
+        source.headers,
+        room: source.room,
+        audioOnly: _runtimeAudioOnly,
+        startMuted: _currentStartMuted,
+        force: true,
+        quality: source.quality,
+        qualityIndex: source.qualityIndex,
+      );
+      if (!isCurrent()) return LiveRecoveryResult.cancelled;
+      if (hasError.value) return LiveRecoveryResult.retry;
+      await onPlaying.where((playing) => playing).first.timeout(const Duration(seconds: 15));
+      if (!isCurrent()) return LiveRecoveryResult.cancelled;
+      _sourceRefreshes.add(source);
+      await reloadDelegate?.onPrimaryReady();
+      return isCurrent() ? LiveRecoveryResult.reopened : LiveRecoveryResult.cancelled;
+    });
+  }
+
   Future<void> retry() {
+    _playbackWanted = true;
+    if (_canRecoverLiveRoom(currentFloatRoom)) {
+      _liveRecovery.startSession(enabled: true);
+      _liveRecovery.observe(playing: true);
+      _liveRecovery.request();
+      return Future.value();
+    }
     return _enqueuePlayerLifecycle(() async {
       final url = _currentUrl;
       if (url == null) return;
@@ -1626,6 +1831,21 @@ class PlayerManager {
     }
     final mySessionId = sessionId ?? _sessionId;
     if (!_isSessionValid(mySessionId)) return;
+
+    if (!_playbackWanted) {
+      hasError.value = true;
+      _errorSubject.add(error);
+      _stateSubject.add(PlayerState.error);
+      return;
+    }
+
+    if (error.type == PlayerErrorType.network || error.type == PlayerErrorType.source) {
+      hasError.value = true;
+      if (_liveRecovery.request()) {
+        _stateSubject.add(PlayerState.buffering);
+        return;
+      }
+    }
 
     _isHandlingError = true;
     try {
@@ -1665,7 +1885,7 @@ class PlayerManager {
       }
 
       log(error.type.toString());
-      if (!lineSwitched && fallbackManager.shouldFallback(error)) {
+      if (!lineSwitched && _sessionEngine == null && fallbackManager.shouldFallback(error)) {
         final nextEngine = await fallbackManager.fallback(_runtimeEngine!, error);
         if (nextEngine == _runtimeEngine) {
           log("skip fallback: nextEngine(${nextEngine.name}) == currentEngine(${_runtimeEngine?.name})");
@@ -1707,6 +1927,7 @@ class PlayerManager {
           return;
         }
         _playingSubject.add(event);
+        _liveRecovery.observe(playing: event);
 
         if (event) {
           hasError.value = false;
@@ -1728,6 +1949,7 @@ class PlayerManager {
         }
 
         _loadingSubject.add(event);
+        _liveRecovery.observe(buffering: event);
 
         if (event && _stateSubject.value != PlayerState.buffering) {
           _stateSubject.add(PlayerState.buffering);
@@ -1742,6 +1964,7 @@ class PlayerManager {
         }
 
         _completeSubject.add(event);
+        if (event && _liveRecovery.request()) _stateSubject.add(PlayerState.buffering);
       }),
     );
 
@@ -1817,6 +2040,8 @@ class PlayerManager {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    releaseCommentaryEngine();
+    _liveRecovery.setWanted(false);
     _sessionId++;
     _isClosing = true;
     _hideTimer?.cancel();
@@ -1836,6 +2061,7 @@ class PlayerManager {
       _errorSubject.close(),
       _widthSubject.close(),
       _heightSubject.close(),
+      _sourceRefreshes.close(),
     ]);
   }
 }

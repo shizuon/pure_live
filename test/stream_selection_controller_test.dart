@@ -71,7 +71,7 @@ void main() {
     final opened = <_OpenedStream>[];
     final controller = PlayerController(
       host,
-      streamSourceOpener: (url, urls, headers, openedRoom, audioOnly) async {
+      streamSourceOpener: (url, urls, headers, openedRoom, audioOnly, quality, qualityIndex) async {
         opened.add(_OpenedStream(url, urls, openedRoom, audioOnly));
       },
     )..initSite(Site(id: 'test', name: 'Test', logo: '', liveSite: siteImpl));
@@ -104,7 +104,7 @@ void main() {
     final opened = <_OpenedStream>[];
     final controller = PlayerController(
       host,
-      streamSourceOpener: (url, urls, headers, openedRoom, audioOnly) async {
+      streamSourceOpener: (url, urls, headers, openedRoom, audioOnly, quality, qualityIndex) async {
         opened.add(_OpenedStream(url, urls, openedRoom, audioOnly));
       },
     )..initSite(Site(id: 'test', name: 'Test', logo: '', liveSite: siteImpl));
@@ -125,7 +125,7 @@ void main() {
     final host = _SelectionHost(room);
     final controller = PlayerController(
       host,
-      streamSourceOpener: (url, urls, headers, openedRoom, audioOnly) async {
+      streamSourceOpener: (url, urls, headers, openedRoom, audioOnly, quality, qualityIndex) async {
         throw StateError('decoder rejected source');
       },
     )..initSite(Site(id: 'test', name: 'Test', logo: '', liveSite: siteImpl));
@@ -151,7 +151,7 @@ void main() {
     var openCalls = 0;
     final controller = PlayerController(
       host,
-      streamSourceOpener: (url, urls, headers, openedRoom, audioOnly) async {
+      streamSourceOpener: (url, urls, headers, openedRoom, audioOnly, quality, qualityIndex) async {
         openCalls++;
       },
     )..initSite(Site(id: 'test', name: 'Test', logo: '', liveSite: siteImpl));

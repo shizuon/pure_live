@@ -4,6 +4,8 @@ import 'package:pure_live/common/index.dart';
 import 'package:pure_live/model/live_play_quality.dart';
 import 'package:pure_live/player/core/playback_header_resolver.dart';
 
+import 'commentary_quality_policy.dart';
+
 class ResolvedStreamCandidate {
   const ResolvedStreamCandidate({
     required this.room,
@@ -21,10 +23,11 @@ class ResolvedStreamCandidate {
 }
 
 class ResolvedCommentarySource {
-  const ResolvedCommentarySource({required this.room, required this.candidates});
+  const ResolvedCommentarySource({required this.room, required this.candidates, this.qualities = const []});
 
   final LiveRoom room;
   final CommentaryCandidates candidates;
+  final List<LivePlayQuality> qualities;
 }
 
 /// A demand-driven cursor: requesting a line never prefetches another quality.
@@ -82,7 +85,7 @@ class CommentaryCandidates {
 class StreamSourceResolver {
   const StreamSourceResolver();
 
-  Future<ResolvedCommentarySource> resolveCommentary(LiveRoom selectedRoom) async {
+  Future<ResolvedCommentarySource> resolveCommentary(LiveRoom selectedRoom, {String? preferredQualityId}) async {
     final platform = selectedRoom.platform;
     final roomId = selectedRoom.roomId;
     if (platform == null || platform.isEmpty || roomId == null || roomId.isEmpty) {
@@ -99,6 +102,7 @@ class StreamSourceResolver {
       final quality = LivePlayQuality(quality: '原画');
       return ResolvedCommentarySource(
         room: detail,
+        qualities: [quality],
         candidates: CommentaryCandidates.fromList([
           ResolvedStreamCandidate(
             room: detail,
@@ -111,15 +115,20 @@ class StreamSourceResolver {
       );
     }
 
-    final qualities = await site.liveSite.getPlayQualites(detail: detail);
+    final uniqueQualities = <String, LivePlayQuality>{};
+    for (final quality in await site.liveSite.getPlayQualites(detail: detail)) {
+      uniqueQualities.putIfAbsent(quality.selectionId.toString(), () => quality);
+    }
+    final qualities = uniqueQualities.values.toList(growable: false);
     final candidates = buildCandidates(
       room: detail,
       qualities: qualities,
       headers: headers,
       getPlayUrls: (quality) => site.liveSite.getPlayUrls(detail: detail, quality: quality),
+      preferredOrder: CommentaryQualityPolicy.order(qualities, preferredId: preferredQualityId),
     );
 
-    return ResolvedCommentarySource(room: detail, candidates: candidates);
+    return ResolvedCommentarySource(room: detail, candidates: candidates, qualities: List.unmodifiable(qualities));
   }
 
   static CommentaryCandidates buildCandidates({
@@ -127,7 +136,8 @@ class StreamSourceResolver {
     required List<LivePlayQuality> qualities,
     required Map<String, String> headers,
     required Future<List<String>> Function(LivePlayQuality quality) getPlayUrls,
-  }) => CommentaryCandidates._(lowestQualityFirst(qualities), (quality) async {
+    List<LivePlayQuality>? preferredOrder,
+  }) => CommentaryCandidates._(preferredOrder ?? lowestQualityFirst(qualities), (quality) async {
     final urls = await getPlayUrls(quality);
     final validUrls = List<String>.unmodifiable(urls.where((url) => url.isNotEmpty).toSet());
     return [

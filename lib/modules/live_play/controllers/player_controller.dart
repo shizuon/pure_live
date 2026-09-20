@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:async';
 
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/model/live_play_quality.dart';
@@ -6,6 +7,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:pure_live/player/core/playback_header_resolver.dart';
 import 'package:pure_live/player/utils/player_consts.dart';
 import 'package:pure_live/player/core/player_manager.dart';
+import 'package:pure_live/player/core/live_source_refresher.dart';
 import 'package:pure_live/player/models/player_exception.dart';
 import 'package:pure_live/player/models/player_error_type.dart';
 import 'package:pure_live/core/interface/live_site.dart';
@@ -20,6 +22,8 @@ typedef StreamSourceOpener = Future<void> Function(
   Map<String, String> headers,
   LiveRoom room,
   bool audioOnly,
+  LivePlayQuality quality,
+  int qualityIndex,
 );
 
 @immutable
@@ -122,10 +126,16 @@ class PlayerController extends GetxController {
   PlayerController(this._main, {StreamSourceOpener? streamSourceOpener})
     : _streamSourceOpener = streamSourceOpener ?? _openGlobalStream {
     _audioModeTransitions = LatestAsyncValueQueue<bool>(_applyCurrentRoomAudioOnly);
+    if (streamSourceOpener == null && GlobalPlayerService.instance.initialized) {
+      _sourceRefreshSubscription = GlobalPlayerService.instance.player.onLiveSourceRefreshed.listen(
+        _applyRefreshedSource,
+      );
+    }
   }
 
   final PlayerSessionHost _main;
   final StreamSourceOpener _streamSourceOpener;
+  StreamSubscription<RefreshedLiveSource>? _sourceRefreshSubscription;
   late final LatestAsyncValueQueue<bool> _audioModeTransitions;
   late Site currentSite;
   int _loadEpoch = 0;
@@ -138,6 +148,8 @@ class PlayerController extends GetxController {
     Map<String, String> headers,
     LiveRoom room,
     bool audioOnly,
+    LivePlayQuality quality,
+    int qualityIndex,
   ) async {
     final manager = GlobalPlayerService.instance.player;
     final commentary = GlobalPlayerService.instance.commentarySyncController;
@@ -150,6 +162,8 @@ class PlayerController extends GetxController {
       room: room,
       audioOnly: audioOnly,
       startMuted: commentary.isActive,
+      quality: quality,
+      qualityIndex: qualityIndex,
     );
     if (manager.hasError.value) {
       throw PlayerException(message: 'Selected stream failed to open', type: PlayerErrorType.source);
@@ -159,6 +173,19 @@ class PlayerController extends GetxController {
 
   LivePlayState get _state => _main.state.value;
   LiveRoom? get currentRoom => _state.room.detail;
+
+  void _applyRefreshedSource(RefreshedLiveSource source) {
+    if (_main.isClosed || currentRoom?.roomId != source.room.roomId || currentRoom?.platform != source.room.platform) {
+      return;
+    }
+    _main.updatePlayer(
+      qualites: source.qualities,
+      currentQuality: source.qualityIndex,
+      currentLineIndex: source.lineIndex,
+      playUrls: source.urls,
+    );
+    _main.updateRoom(detail: source.room, success: true, isLoading: false);
+  }
 
   void initSite(Site site) {
     currentSite = site;
@@ -219,6 +246,7 @@ class PlayerController extends GetxController {
       allowScreenKeepOn: SettingsService.to.app.enableScreenKeepOn.v,
       headers: headers,
       qualiteName: playerState.qualitySafe.quality,
+      recoveryQuality: playerState.qualitySafe,
       currentLineIndex: playerState.currentLineIndex,
       currentQuality: playerState.currentQuality,
       isAudioOnly: playerState.isCurrentRoomAudioOnly,
@@ -266,6 +294,7 @@ class PlayerController extends GetxController {
       allowScreenKeepOn: SettingsService.to.app.enableScreenKeepOn.v,
       headers: session.headers,
       qualiteName: qualities[currentQuality].quality,
+      recoveryQuality: qualities[currentQuality],
       currentLineIndex: currentLineIndex,
       currentQuality: currentQuality,
       isAudioOnly: manager.desiredAudioOnlyMode,
@@ -456,6 +485,8 @@ class PlayerController extends GetxController {
         Map<String, String>.unmodifiable(headers),
         room,
         _state.player.isCurrentRoomAudioOnly,
+        before.qualites[selection.qualityIndex],
+        selection.qualityIndex,
       );
       if (!_isLoadCurrent(loadEpoch, room, site) || selectionEpoch != _streamSelectionEpoch) return false;
       _main.updatePlayer(
@@ -534,6 +565,7 @@ class PlayerController extends GetxController {
 
   @override
   void onClose() {
+    unawaited(_sourceRefreshSubscription?.cancel());
     _streamSelectionEpoch++;
     isStreamSwitching.value = false;
     invalidateLoad();

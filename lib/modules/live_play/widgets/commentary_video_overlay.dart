@@ -5,6 +5,7 @@ import 'package:rxdart/rxdart.dart';
 import 'package:pure_live/modules/live_play/controllers/commentary_sync_controller.dart';
 import 'package:pure_live/modules/live_play/states/commentary_overlay_layout.dart';
 import 'package:pure_live/player/interface/unified_player_interface.dart';
+import 'package:pure_live/player/widgets/stable_player_video.dart';
 
 /// Shares B's existing player. Preview, crop editor and overlay never render it
 /// simultaneously (important for native video output sizing on Windows/macOS).
@@ -89,7 +90,7 @@ class _SourceSizedOverlayState extends State<_SourceSizedOverlay> {
             aspectRatio: ratio,
             ready: ready && state.isActive,
             initialCrop: state.overlayLayout.crop,
-            video: state.isActive ? widget.player.getVideoWidget(BoxFit.contain) : const SizedBox.shrink(),
+            video: StablePlayerVideo(key: ObjectKey(widget.player), player: widget.player),
             onCancel: widget.sync.cancelOverlayCrop,
             onConfirm: widget.sync.confirmOverlayCrop,
           );
@@ -138,7 +139,9 @@ class _SourceSizedOverlayState extends State<_SourceSizedOverlay> {
                                     -layout.crop.left * bounds.width / layout.crop.width,
                                     -layout.crop.top * bounds.height / layout.crop.height,
                                   ),
-                                  child: IgnorePointer(child: widget.player.getVideoWidget(BoxFit.contain)),
+                                  child: IgnorePointer(
+                                    child: StablePlayerVideo(key: ObjectKey(widget.player), player: widget.player),
+                                  ),
                                 ),
                               ),
                             ),
