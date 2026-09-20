@@ -49,6 +49,9 @@ YouTube 房间明确显示未开放，不伪装连接成功，也不持续空轮
 - Twitch：`croissantstrike` / `FR` / `counter-strike`；ChannelShell 和 StreamMetadata
   返回用户和 live 状态，primaryTeam 非关键字段偶发 service error，不阻止读房间。
   无标签目录首屏返回 100 项、包含 Counter-Strike 并提供下一页游标。
+  最终 `DirectoryPage_Game` 无语言过滤、默认 limit 30 的实际请求返回 29 个直播间，
+  第一页包含 `croissantstrike`，`hasNextPage=true`，无 GraphQL errors。首次额外探测
+  遇到连接重置，重试取得上述结果；未将临时传输失败当成代码遗漏。
 - Kick：搜索、分类和直播目录可用；直播目录至少返回 5 条，因此适配器缓存超额条目。
   在线房间 HLS 返回 5 档，含音轨。`web.kick.com/api/v1/realtime/channels/.../chat/connection`
   返回公开 Pusher 连接参数。旧固定实时连接地址不作为配置来源。
@@ -91,6 +94,6 @@ YouTube 房间明确显示未开放，不伪装连接成功，也不持续空轮
 - 最终源码 `e46fc641a794f37e840c987d53fb7afec416ea52` 已推送用户仓库 master 与
   `feat/global-platforms-20260921`。主分支一并包含之前移动端、高清 B 和校准修复。
 - Mac [运行 35526922008](https://github.com/shizuon/pure_live/actions/runs/35526922008)
-  已启动，当前为依赖解析阶段。此前两个候选运行已取消，不作为交付证据。
+  已启动，当前进入 macOS Release 编译阶段。此前两个候选运行已取消，不作为交付证据。
 - 当前线程自动化 `pure-live-3-0-23` 每 20 分钟继续检查；Mac 下载核验后启动 Android，
   Android 下载核验后启动 iOS，三平台记录完成才停止。此处尚不宣称安装包已完成。
