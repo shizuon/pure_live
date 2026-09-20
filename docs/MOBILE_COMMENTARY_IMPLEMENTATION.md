@@ -101,3 +101,7 @@ Android 首轮后续结果：原生 APK 编译成功，内容检查及 APK v2 �
 - Android 完全结束后，同一提交的 iOS [运行 35519995189](https://github.com/shizuon/pure_live/actions/runs/35519995189) 全部成功。[普通未签名 IPA 附件](https://github.com/shizuon/pure_live/actions/runs/35519995189/artifacts/10608123252) 已上传；未创建正式 Release。
 - `PureLive-3.0.22-4110-ios-arm64-unsigned.ipa` SHA256：`9589e9ea278a8aa2895610d22aa015122be6f37e7690b80f5dec7a045eda7863`。本机下载后哈希与 `verify_unsigned_ipa.py` 通过，确认 iPhoneOS、主程序和 Flutter/AOT arm64、版本 `3.0.22 (4110)`、资源完整；主应用和分享扩展的 `MinimumOSVersion` 均为 `15.6`。IPA 仍需用户自行签名，尚未在设备安装或运行。
 - 使用步骤见 [移动端测试说明](MOBILE_COMMENTARY_TEST_GUIDE.md)。实机问题继续按反馈修复；编译和假播放器测试不证明 30 分钟漂移、发热、来电/蓝牙和锁屏恢复已达标。
+
+### Mac 下载后复核补记
+
+2026-09-21 本机重新下载 Mac 附件成功。DMG 与应用 ZIP 的 `shasum -c` 均通过，应用 ZIP 压缩内容检查通过；未挂载或启动应用。DMG SHA256：`aea620c5554a5c2097f77da7241e305ed5c3ac47422887b452d3e7812eb6001a`。至此三平台候选均已交付并完成下载后校验，剩余验收依赖用户真实播放反馈，不再轮询已经结束的构建。
