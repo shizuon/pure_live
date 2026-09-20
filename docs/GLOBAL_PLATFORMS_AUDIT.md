@@ -82,3 +82,6 @@ YouTube 房间明确显示未开放，不伪装连接成功，也不持续空轮
   均主动关闭连接。该证据仍不是原生解码、用户地区网络或长时运行验证。
 - 普通 11 字符搜索词不再误作 YouTube 视频 ID；新增回归后新平台 18 项通过。
   最终定向分析为 0 error / 0 warning，仅 2 条 null-aware 风格提示。
+- Kick 分类筛选实测要求 slug，数字 ID 会被服务端静默忽略并返回全站列表。
+  已传递 `shortName`，以 `counter-strike-2` 实测返回 StarLadder、MAJ3R、Gaules 等
+  CS 直播，补充对应请求契约测试。

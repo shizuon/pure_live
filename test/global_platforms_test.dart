@@ -7,6 +7,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:pure_live/common/services/settings/favorite_room_controller.dart';
+import 'package:pure_live/common/models/live_area.dart';
 import 'package:pure_live/common/utils/hive_pref_util.dart';
 import 'package:pure_live/core/danmaku/kick_danmaku.dart';
 import 'package:pure_live/core/danmaku/youtube_danmaku.dart';
@@ -294,6 +295,14 @@ void main() {
     });
     expect((await site.searchRooms('demo')).single.status, true);
     expect(await site.searchRooms('demo', page: 2), isEmpty);
+  });
+
+  test('Kick directory filters by category slug rather than silently ignored numeric ID', () async {
+    final site = FixtureKick((path, query) {
+      expect(query!['subcategory'], 'counter-strike-2');
+      return {'data': [], 'next_page_url': null};
+    });
+    await site.getCategoryRooms(LiveArea(areaId: '27', shortName: 'counter-strike-2'));
   });
 
   test('YouTube embedded JSON survives braces and escaped quotes inside strings', () {

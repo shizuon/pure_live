@@ -99,7 +99,7 @@ class KickSite extends LiveSite implements LiveSiteRoomRefresher, LiveSiteRecord
 
   @override
   Future<List<LiveRoom>> getCategoryRooms(LiveArea category, {int page = 1, int pageSize = 30}) =>
-      _directory(page, pageSize, category: category.areaId);
+      _directory(page, pageSize, category: category.shortName);
 
   @override
   Future<List<LiveRoom>> searchRooms(String keyword, {int page = 1, int pageSize = 30}) async {
