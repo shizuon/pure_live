@@ -15,7 +15,8 @@
 - [Windows 数据目录与升级](WINDOWS_DATA_AND_UPGRADE.md)：安装目录数据、旧版关注合并、换盘迁移与回滚。
 - [双流解说平台调试与移植](DUAL_COMMENTARY_PLATFORM_DEBUG.md)：macOS 当前实现、Windows 调试清单与 iPad/iOS 可行性。
 - [AngelLive 斗鱼修复与移动端迁移研究](ANGELLIVE_DOUYU_MOBILE_RESEARCH_2026_09_20.md)：心跳与直播恢复的源码对照，Android/iOS 双流、校准、弹幕和裁剪覆盖的实际缺口与交付顺序。
-- [移动端双流实现记录](MOBILE_COMMENTARY_IMPLEMENTATION.md)：当前完成的恢复、引擎与系统音频基础，验证证据和未完成交付。
+- [移动端双流实现记录](MOBILE_COMMENTARY_IMPLEMENTATION.md)：恢复、引擎、系统音频、触摸校准与后台控制的实现，以及已交付 APK/IPA 的验证证据和实机待验项。
+- [移动端测试包操作说明](MOBILE_COMMENTARY_TEST_GUIDE.md)：自行签名安装、校准、裁剪覆盖、弹幕和后台恢复的测试步骤。
 - [依赖与接口审计](DEPENDENCY_AUDIT.md)：依赖锁定策略、暂缓升级原因和直播平台接口探测边界。
 - [平台接口与兼容性](PLATFORM_COMPATIBILITY.md)：各平台分区、搜索、弹幕和人数指标的当前能力。
 - [Android/Windows 性能验证](PERFORMANCE.md)：120 Hz 请求、渲染/滑动优化和实机采样方法。
