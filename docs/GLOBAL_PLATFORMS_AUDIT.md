@@ -85,3 +85,12 @@ YouTube 房间明确显示未开放，不伪装连接成功，也不持续空轮
 - Kick 分类筛选实测要求 slug，数字 ID 会被服务端静默忽略并返回全站列表。
   已传递 `shortName`，以 `counter-strike-2` 实测返回 StarLadder、MAJ3R、Gaules 等
   CS 直播，补充对应请求契约测试。
+
+## 云端交付进度
+
+- 最终源码 `e46fc641a794f37e840c987d53fb7afec416ea52` 已推送用户仓库 master 与
+  `feat/global-platforms-20260921`。主分支一并包含之前移动端、高清 B 和校准修复。
+- Mac [运行 35526922008](https://github.com/shizuon/pure_live/actions/runs/35526922008)
+  已启动，当前为依赖解析阶段。此前两个候选运行已取消，不作为交付证据。
+- 当前线程自动化 `pure-live-3-0-23` 每 20 分钟继续检查；Mac 下载核验后启动 Android，
+  Android 下载核验后启动 iOS，三平台记录完成才停止。此处尚不宣称安装包已完成。
