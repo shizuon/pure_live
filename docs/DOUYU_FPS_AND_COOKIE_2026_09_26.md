@@ -77,3 +77,16 @@ InAppWebView 原生Cookie存储读取 HttpOnly 会话，不读取密码、不注
 
 本机忽略目录 `local-artifacts/douyu-fps-20260926/` 保留脱敏探测、
 固定提交的对照源码和测试日志。原始签名播放URL、账号Cookie均不提交。
+
+## 发布跟进
+
+- 最终业务提交 `852a53b4dca6fba7932227346c6eb6a789eea5fa` 已推送用户仓库
+  master 与 `feat/global-platforms-20260921`。最后补充三文件13项测试通过。
+- [云构建 36235924525](https://github.com/shizuon/pure_live/actions/runs/36235924525)
+  已启动完整质量阶段，仅Mac开启。用户已授权构建核验后直接发布 `v3.0.24`
+  Release；以 `RELEASE_3_0_24.md` 为说明，不发布其他平台旧包。
+- 默认GitHub账号发生变化，已使用保存的 shizuon 授权按命令指定，
+  不切换全局账号、不输出凭据；后续构建操作和发布继续使用该账号。
+- 低频自动跟进 `pure-live-3-0-24-mac-release` 每20分钟检查，覆盖失败修复、
+  下载校验、公开Release、审计及版本索引推送，全部完成才停止。
+  当前尚未完成安装包或发布，不把已提交源码当作用户可下载新包。
