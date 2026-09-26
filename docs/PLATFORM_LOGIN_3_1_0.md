@@ -68,4 +68,16 @@ SOOP/CC等仅有证据缺口的平台不随意改取流参数；已有公开流�
 - 3.0.24 run `36236597046` 编译成功但校验资源临时繁忙；新任务取代旧版发布，
   不再发布3.0.24，也不把旧平台产物挂到3.1.0。
 
-最终完整回归已完成；源码合并、云运行ID、各产物SHA和Release地址尚待补齐。
+## 最终源码与构建队列
+
+- `28e06159a5fa98dcf558868b046f94ee09887804` 已快进合并并推送用户仓库
+  `master` 与 `feat/platform-quality-login-20260926`。没有上游merge。
+- [首轮云构建 36240491330](https://github.com/shizuon/pure_live/actions/runs/36240491330)
+  从该源码启动，先完整质量，再仅Mac。所有后续平台按同业务源码串行。
+- 全平台尚未交付；顺序为Mac核验→Android测试APK核验→Windows核验→Linux核验
+  →普通未签名iOS IPA核验→统一Release发布及索引。每阶段成功不结束整体任务。
+- 本地Git曾因同步产生非法引用 `refs/remotes/fork/feat/global-platforms-20260921 2`，
+  已备份至忽略目录 `local-artifacts/git-ref-backup/` 后移出refs命名空间；
+  正常引用、历史与用户文件未删除。另出现未跟踪 `assets/version 2.json`，保留不提交。
+
+最终完整回归和源码合并已完成；各平台产物SHA及Release地址尚待补齐。
