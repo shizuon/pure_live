@@ -111,3 +111,20 @@ master/开发分支。[最终Mac云构建 36248835900](https://github.com/shizuo
 - [Android运行 36243216645](https://github.com/shizuon/pure_live/actions/runs/36243216645)
   已在Mac核验后启动，仅Android测试签名。所用分支较Mac业务SHA仅有交付文档变更。
   Android完成核验后继续Windows、Linux、iOS；尚未发布Release。
+
+## 最终业务版本交付（df46251f）
+
+- 最终Mac运行 `36248835900` 成功，云端 **606项测试通过**。下载后再次确认
+  `3.1.0 (4113)`、`x86_64 arm64`、ZIP CRC、SHA256、DMG verify全部通过，
+  不挂载、不安装、不启动应用。
+- [最终Mac附件](https://github.com/shizuon/pure_live/actions/runs/36248835900/artifacts/10908975991)
+  截止 `2026-09-29 15:01:00 UTC`；正式交付仍等待统一Release。
+  本机目录 `local-artifacts/cloud-final-macos-3.1.0/`，云日志
+  `local-artifacts/cloud-final-macos-3.1.0.log`。
+- DMG：122010111字节，
+  SHA256 `c0cf469d3343935a0a146113ecc5480ab513642d11a9744e54513c8570f458ed`。
+- ZIP：106676845字节，
+  SHA256 `4776b7262fb8ecac4a99b96709ec350248d869051011567cdd48d3ec4b0953af`。
+- [最终Android运行 36251790710](https://github.com/shizuon/pure_live/actions/runs/36251790710)
+  已在最终Mac下载核验后启动，仅Android测试签名；ref后续仅有文档差异。
+  后续Windows、Linux、iOS仍待串行构建和核验；全平台Release尚未发布。
