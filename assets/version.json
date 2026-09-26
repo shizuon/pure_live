@@ -1,9 +1,9 @@
 {
-  "version": "3.0.23",
-  "build_number": 4111,
-  "version_num": 300234111,
+  "version": "3.0.24",
+  "build_number": 4112,
+  "version_num": 300244112,
   "android_abis": ["arm64-v8a"],
-  "version_desc": "3.0.23 候选：新增 Kick、YouTube 公开直播与弹幕，修复 Twitch 语言过滤、目录遗漏和分页丢房间。安装包及设备测试状态见 Actions 和文档。",
+  "version_desc": "3.0.24 Mac 候选：斗鱼官方网页登录自动保存会话，修正原画请求实际降档却仍标为1080P60的问题。登录后原画和持续播放待实机验证。",
   "prerelease": true,
   "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
   "platforms": {
@@ -34,10 +34,10 @@
       "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
     },
     "macos": {
-      "version": "3.0.23",
-      "build_number": 4111,
-      "version_num": 300234111,
-      "version_desc": "Kick / YouTube 与 Twitch 修复候选，保留高清 B、校准、覆盖与三档解码；测试包见 Actions。",
+      "version": "3.0.24",
+      "build_number": 4112,
+      "version_num": 300244112,
+      "version_desc": "斗鱼官方网页登录、扫码入口和实际画质回传候选；保留双流、覆盖与硬解设置。真实账号及60帧持续播放待验证。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },

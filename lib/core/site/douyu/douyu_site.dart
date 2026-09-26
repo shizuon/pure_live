@@ -13,7 +13,13 @@ import 'package:pure_live/core/interface/live_danmaku.dart';
 import 'package:pure_live/core/utils/live_quality_label.dart';
 import 'package:pure_live/modules/live_play/controllers/player_controller.dart';
 
-class DouyuSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomResolver, LivePlayUrlCursorResolver {
+class DouyuSite
+    implements
+        LiveSite,
+        LiveSiteRoomRefresher,
+        LiveSiteRecordRoomResolver,
+        LivePlayUrlCursorResolver,
+        LivePlayUrlResolver {
   @override
   String id = Sites.douyuSite;
 
@@ -166,21 +172,43 @@ class DouyuSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomRe
 
   @override
   Future<List<String>> getPlayUrls({required LiveRoom detail, required LivePlayQuality quality}) async {
+    return (await resolvePlayUrlsRaw(detail: detail, quality: quality)).urls;
+  }
+
+  @override
+  Future<LivePlayUrlResolution> resolvePlayUrlsRaw({required LiveRoom detail, required LivePlayQuality quality}) async {
     final rawData = quality.data;
-    if (rawData is! DouyuPlayData) return const <String>[];
+    if (rawData is! DouyuPlayData) return const LivePlayUrlResolution(urls: []);
     final data = rawData;
-    final urls = <String>[];
+    final groups = <Object?, List<String>>{};
+    final descriptions = <Object?, LivePlayQuality?>{};
     Object? lastError;
     for (final cdn in data.cdns) {
       try {
-        final url = await getPlayUrl(detail.roomId!, data.rate, cdn);
-        if (url.isNotEmpty && !urls.contains(url)) urls.add(url);
+        final result = await resolvePlayUrl(detail.roomId!, data.rate, cdn, data.cdns);
+        final urls = groups.putIfAbsent(result.appliedQualityData, () => []);
+        descriptions[result.appliedQualityData] = result.unlistedQuality;
+        for (final url in result.urls) {
+          if (!urls.contains(url)) urls.add(url);
+        }
       } catch (error) {
         lastError = error;
       }
     }
-    if (urls.isEmpty && lastError != null) throw lastError;
-    return urls;
+    if (groups.isEmpty) {
+      if (lastError != null) throw lastError;
+      return const LivePlayUrlResolution(urls: []);
+    }
+    // Rates are opaque IDs, not bitrates. Prefer the requested rate, then
+    // the first confirmed group; never mix downgraded and source URLs.
+    final applied = groups.containsKey(data.rate)
+        ? data.rate
+        : groups.keys.whereType<int>().firstOrNull ?? groups.keys.first;
+    return LivePlayUrlResolution(
+      urls: List.unmodifiable(groups[applied]!),
+      appliedQualityData: applied,
+      unlistedQuality: descriptions[applied],
+    );
   }
 
   @override
@@ -197,16 +225,46 @@ class DouyuSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomRe
     if (roomId.isEmpty) {
       return LivePlayUrlResolution(urls: const <String>[], appliedQualityData: quality.selectionId);
     }
-    final url = await getPlayUrl(roomId, data.rate, data.cdns[lineIndex]);
-    return LivePlayUrlResolution(
-      urls: url.isEmpty ? const <String>[] : <String>[url],
-      appliedQualityData: quality.selectionId,
-    );
+    return resolvePlayUrl(roomId, data.rate, data.cdns[lineIndex], data.cdns);
   }
 
   Future<String> getPlayUrl(String roomId, int rate, String cdn) async {
+    return (await resolvePlayUrl(roomId, rate, cdn, [cdn])).urls.single;
+  }
+
+  Future<LivePlayUrlResolution> resolvePlayUrl(String roomId, int rate, String cdn, List<String> cdns) async {
     final playData = await _requestPlayData(roomId, rate: rate, cdn: cdn);
-    return parsePlayUrl(playData);
+    return parseAcknowledgedStream(playData, requestedRate: rate, cdns: cdns);
+  }
+
+  @visibleForTesting
+  static LivePlayUrlResolution parseAcknowledgedStream(
+    Map<String, dynamic> playData, {
+    required int requestedRate,
+    required List<String> cdns,
+  }) {
+    final raw = playData['rate'];
+    final rate = raw is int
+        ? raw
+        : raw is String
+        ? int.tryParse(raw)
+        : null;
+    final confirmed = rate != null && rate >= 0;
+    final Object id = confirmed ? rate : 'douyu-unconfirmed:$requestedRate';
+    final advertised = playData['multirates'] is List ? parsePlayQualities(playData, cdns) : <LivePlayQuality>[];
+    final name = confirmed
+        ? advertised.where((q) => q.selectionId == rate).firstOrNull?.quality ??
+              i18n('quality_server_code', args: {'code': '$rate'})
+        : i18n('quality_unconfirmed');
+    return LivePlayUrlResolution(
+      urls: [parsePlayUrl(playData)],
+      appliedQualityData: id,
+      unlistedQuality: LivePlayQuality(
+        quality: name,
+        id: id,
+        data: DouyuPlayData(confirmed ? rate : requestedRate, List.unmodifiable(cdns)),
+      ),
+    );
   }
 
   Future<Map<String, dynamic>> _requestPlayData(String roomId, {int rate = -1, String cdn = ''}) async {

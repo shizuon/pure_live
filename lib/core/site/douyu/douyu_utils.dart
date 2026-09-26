@@ -3,6 +3,8 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:pure_live/core/common/http_client.dart';
+import 'package:pure_live/common/services/settings_service.dart';
+import 'package:pure_live/core/site/douyu/douyu_cookie.dart';
 
 class DouyuUtils {
   static const String defaultDeviceId = '10000000000000000000000000001501';
@@ -99,7 +101,7 @@ class DouyuUtils {
       'origin': 'https://www.douyu.com',
       'referer': referer,
       'user-agent': userAgent,
-      'cookie': 'dy_did=$deviceId; acf_did=$deviceId',
+      'cookie': cookieHeader(),
     };
   }
 
@@ -107,8 +109,18 @@ class DouyuUtils {
     'origin': 'https://www.douyu.com',
     'referer': 'https://www.douyu.com/$roomId',
     'user-agent': userAgent,
-    'cookie': 'dy_did=$deviceId; acf_did=$deviceId',
+    'cookie': cookieHeader(),
   };
+
+  static String cookieHeader() {
+    var accountCookie = '';
+    try {
+      accountCookie = SettingsService.to.cookieManager.douyuCookie.value;
+    } catch (_) {
+      // Offline callers and tests can resolve anonymous headers without GetX.
+    }
+    return buildDouyuCookieHeader(accountCookie, deviceId);
+  }
 
   /// Builds the form body from an already validated encryption descriptor.
   /// Exposed as a deterministic unit-test seam for the platform signing path.

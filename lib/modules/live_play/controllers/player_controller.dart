@@ -385,13 +385,15 @@ class PlayerController extends GetxController {
       return;
     }
 
+    final acknowledgedQualities = resolution.withAcknowledgedQuality(playerState.qualites);
     final appliedQuality = resolveAppliedQualityIndex(
-      qualities: playerState.qualites,
+      qualities: acknowledgedQualities,
       requestedIndex: playerState.currentQuality,
       appliedQualityData: resolution.appliedQualityData,
     );
     final lineIndex = playerState.currentLineIndex.clamp(0, resolution.urls.length - 1);
     _main.updatePlayer(
+      qualites: acknowledgedQualities,
       playUrls: List<String>.unmodifiable(resolution.urls),
       currentQuality: appliedQuality,
       currentLineIndex: lineIndex,
@@ -447,19 +449,20 @@ class PlayerController extends GetxController {
         return false;
       }
 
+      final acknowledgedQualities = resolution.withAcknowledgedQuality(before.qualites);
       final appliedQuality = resolveAppliedQualityIndex(
-        qualities: before.qualites,
+        qualities: acknowledgedQualities,
         requestedIndex: requestedQuality,
         appliedQualityData: resolution.appliedQualityData,
       );
       final qualityAdjusted = type == ReloadDataType.changeQuality && appliedQuality != requestedQuality;
       if (qualityAdjusted && appliedQuality == before.currentQuality) {
-        ToastUtil.show(i18n('quality_limited_to', args: {'quality': before.qualites[appliedQuality].quality}));
+        ToastUtil.show(i18n('quality_limited_to', args: {'quality': acknowledgedQualities[appliedQuality].quality}));
         return false;
       }
 
       final selection = resolveStreamSelection(
-        qualityCount: before.qualites.length,
+        qualityCount: acknowledgedQualities.length,
         playUrlCount: urls.length,
         requestedQualityIndex: appliedQuality,
         requestedLineIndex: lineIndex,
@@ -473,7 +476,7 @@ class PlayerController extends GetxController {
       }
 
       final cachedHeaders = before.videoController?.headers;
-      final headers = cachedHeaders == null || cachedHeaders.isEmpty
+      final headers = room.platform == Sites.douyuSite || cachedHeaders == null || cachedHeaders.isEmpty
           ? await getHeaders(expectedSite: site, expectedRoom: room)
           : Map<String, String>.from(cachedHeaders);
       if (!_isLoadCurrent(loadEpoch, room, site) || selectionEpoch != _streamSelectionEpoch) return false;
@@ -485,11 +488,12 @@ class PlayerController extends GetxController {
         Map<String, String>.unmodifiable(headers),
         room,
         _state.player.isCurrentRoomAudioOnly,
-        before.qualites[selection.qualityIndex],
+        acknowledgedQualities[selection.qualityIndex],
         selection.qualityIndex,
       );
       if (!_isLoadCurrent(loadEpoch, room, site) || selectionEpoch != _streamSelectionEpoch) return false;
       _main.updatePlayer(
+        qualites: acknowledgedQualities,
         currentQuality: selection.qualityIndex,
         playUrls: immutableUrls,
         currentLineIndex: selection.lineIndex,
@@ -497,7 +501,9 @@ class PlayerController extends GetxController {
       );
       _main.updateRoom(success: true, isLoading: false, loadError: null);
       if (qualityAdjusted) {
-        ToastUtil.show(i18n('quality_limited_to', args: {'quality': before.qualites[selection.qualityIndex].quality}));
+        ToastUtil.show(
+          i18n('quality_limited_to', args: {'quality': acknowledgedQualities[selection.qualityIndex].quality}),
+        );
       }
       return true;
     } catch (error, stackTrace) {

@@ -306,7 +306,11 @@ class StreamResolverService extends GetxService {
         .where(_isRecordableUrl)
         .where((url) => seen.add(_streamIdentity(url)))
         .toList(growable: false);
-    final appliedQuality = _appliedQuality(orderedQualities, requestedQuality, resolution.appliedQualityData);
+    final appliedQuality = _appliedQuality(
+      resolution.withAcknowledgedQuality(orderedQualities),
+      requestedQuality,
+      resolution.appliedQualityData,
+    );
     return _ResolvedQuality(
       requestedQualityId: requestedQuality.selectionId.toString(),
       appliedQuality: appliedQuality,

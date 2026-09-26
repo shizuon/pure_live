@@ -93,6 +93,7 @@ class RoutePath {
   static const kWebDavPage = "/web_dav_page";
 
   static const kDouyuCookie = "/douyu_cookie";
+  static const kDouyuAccountCookie = "/douyu_account_cookie";
 
   static const kKuaishouCookie = "/kuaishou_cookie";
 

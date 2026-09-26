@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/model/live_play_quality.dart';
+import 'package:pure_live/core/interface/live_site.dart';
 import 'package:pure_live/player/core/playback_header_resolver.dart';
 
 import 'commentary_quality_policy.dart';
@@ -125,6 +126,7 @@ class StreamSourceResolver {
       qualities: qualities,
       headers: headers,
       getPlayUrls: (quality) => site.liveSite.getPlayUrls(detail: detail, quality: quality),
+      resolvePlayUrls: (quality) => site.liveSite.resolvePlayUrls(detail: detail, quality: quality),
       preferredOrder: CommentaryQualityPolicy.order(qualities, preferredId: preferredQualityId),
     );
 
@@ -136,13 +138,19 @@ class StreamSourceResolver {
     required List<LivePlayQuality> qualities,
     required Map<String, String> headers,
     required Future<List<String>> Function(LivePlayQuality quality) getPlayUrls,
+    Future<LivePlayUrlResolution> Function(LivePlayQuality quality)? resolvePlayUrls,
     List<LivePlayQuality>? preferredOrder,
   }) => CommentaryCandidates._(preferredOrder ?? lowestQualityFirst(qualities), (quality) async {
-    final urls = await getPlayUrls(quality);
+    final resolution = resolvePlayUrls == null ? null : await resolvePlayUrls(quality);
+    final urls = resolution?.urls ?? await getPlayUrls(quality);
+    final available = resolution?.withAcknowledgedQuality(qualities) ?? qualities;
+    final actualQuality =
+        available.where((q) => q.selectionId.toString() == resolution?.appliedQualityData?.toString()).firstOrNull ??
+        quality;
     final validUrls = List<String>.unmodifiable(urls.where((url) => url.isNotEmpty).toSet());
     return [
       for (final url in validUrls)
-        ResolvedStreamCandidate(room: room, quality: quality, url: url, playUrls: validUrls, headers: headers),
+        ResolvedStreamCandidate(room: room, quality: actualQuality, url: url, playUrls: validUrls, headers: headers),
     ];
   });
 

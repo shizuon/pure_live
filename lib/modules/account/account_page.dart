@@ -114,14 +114,15 @@ class AccountPage extends GetView<AccountController> {
                     : Get.toNamed(RoutePath.kSoop),
               );
             }),
-            _buildAccountTile(
-              context,
-              logo: 'assets/images/douyu.png',
-              title: i18n("site_douyu"),
-              subtitle: i18n("set_cookie"),
-              isLogined: false,
-              isEnabled: false,
-              onTap: () => Get.toNamed(RoutePath.kDouyuCookie),
+            Obx(
+              () => _buildAccountTile(
+                context,
+                logo: 'assets/images/douyu.png',
+                title: i18n("site_douyu"),
+                subtitle: cookie.douyuCookie.value.isEmpty ? i18n("douyu_login") : i18n('douyu_cookie_stored'),
+                isLogined: false,
+                onTap: () => Get.toNamed(RoutePath.kDouyuAccountCookie),
+              ),
             ),
           ]),
           const SizedBox(height: 32),

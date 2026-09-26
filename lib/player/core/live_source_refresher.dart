@@ -60,7 +60,7 @@ class LiveSourceRefresher {
       throw StateError('Live status is not available');
     }
     final detail = fetched.withAudienceFallbackFrom(room).fillFromDetail(room);
-    final qualities = await site.getPlayQualites(detail: detail);
+    var qualities = await site.getPlayQualites(detail: detail);
     if (qualities.isEmpty) throw StateError('No live qualities available');
     var qualityIndex = preferredQuality == null
         ? -1
@@ -70,6 +70,7 @@ class LiveSourceRefresher {
     }
     if (qualityIndex < 0) qualityIndex = preferredQualityIndex.clamp(0, qualities.length - 1);
     final resolved = await site.resolvePlayUrls(detail: detail, quality: qualities[qualityIndex]);
+    qualities = resolved.withAcknowledgedQuality(qualities);
     final urls = normalizeResolvedPlayUrls(resolved.urls);
     if (urls.isEmpty) throw StateError('No fresh live URL available');
     if (resolved.appliedQualityData != null) {

@@ -20,10 +20,23 @@ import 'package:pure_live/core/interface/live_danmaku.dart';
 /// [LivePlayQuality.selectionId] for platforms whose URL response has no
 /// separate acknowledgement.
 class LivePlayUrlResolution {
-  const LivePlayUrlResolution({required this.urls, this.appliedQualityData});
+  const LivePlayUrlResolution({required this.urls, this.appliedQualityData, this.unlistedQuality});
 
   final List<String> urls;
   final Object? appliedQualityData;
+
+  /// A platform acknowledgement missing from the advertised menu, including
+  /// explicit "unconfirmed" entries. Keeps playable streams without claiming
+  /// that the originally requested label was verified.
+  final LivePlayQuality? unlistedQuality;
+
+  List<LivePlayQuality> withAcknowledgedQuality(List<LivePlayQuality> qualities) {
+    final extra = unlistedQuality;
+    if (extra == null || qualities.any((q) => q.selectionId.toString() == extra.selectionId.toString())) {
+      return qualities;
+    }
+    return [...qualities, extra];
+  }
 }
 
 /// Removes blank and duplicate lines while preserving platform priority.
@@ -156,6 +169,7 @@ extension LiveSitePlayUrlResolution on LiveSite {
       return LivePlayUrlResolution(
         urls: normalizeResolvedPlayUrls(resolution.urls),
         appliedQualityData: resolution.appliedQualityData,
+        unlistedQuality: resolution.unlistedQuality,
       );
     }
 

@@ -1,11 +1,15 @@
 import 'package:pure_live/get/get.dart';
 import 'package:pure_live/common/services/utils/hive_rx.dart';
 import 'package:pure_live/common/services/settings/bilibili_account_service.dart';
+import 'package:pure_live/core/site/douyu/douyu_cookie.dart';
 
 class CookieSettingsController extends GetxController {
   final RxString bilibiliCookie = hiveString('bilibiliCookie', '');
   final RxInt bilibiliUid = hiveInt('bilibiliUid', 0);
   final RxString huyaCookie = hiveString('huyaCookie', '');
+  final RxString douyuCookie = hiveString('douyuCookie', '');
+
+  void setDouyuCookie(String value) => douyuCookie.value = normalizeDouyuCookie(value);
   final RxString douyinCookie = hiveString('douyinCookie', '');
   final RxString kuaishouCookie = hiveString('kuaishouCookie', '');
   final RxString twitchCookie = hiveString('twitchCookie', '');
@@ -14,6 +18,7 @@ class CookieSettingsController extends GetxController {
   void clearAllCookies() {
     bilibiliCookie.v = '';
     huyaCookie.v = '';
+    douyuCookie.v = '';
     douyinCookie.v = '';
     kuaishouCookie.v = '';
     twitchCookie.v = '';
@@ -23,6 +28,8 @@ class CookieSettingsController extends GetxController {
   }
 
   Map<String, dynamic> toJson() {
+    // Douyu web-login sessions stay local, including legacy export paths that
+    // opt into serializing other platforms' sensitive account settings.
     return {
       'bilibiliCookie': bilibiliCookie.v,
       'huyaCookie': huyaCookie.v,
@@ -38,6 +45,7 @@ class CookieSettingsController extends GetxController {
   void fromJson(Map<String, dynamic> json) {
     bilibiliCookie.v = json['bilibiliCookie'] ?? '';
     huyaCookie.v = json['huyaCookie'] ?? '';
+    setDouyuCookie(json['douyuCookie'] is String ? json['douyuCookie'] as String : '');
     douyinCookie.v = json['douyinCookie'] ?? '';
     kuaishouCookie.v = json['kuaishouCookie'] ?? '';
     bilibiliUid.v = json['bilibiliUid'] ?? 0;
@@ -54,6 +62,7 @@ class CookieSettingsController extends GetxController {
     return {
       'bilibiliCookie': cookie['bilibiliCookie'] ?? '',
       'huyaCookie': cookie['huyaCookie'] ?? '',
+      'douyuCookie': normalizeDouyuCookie(cookie['douyuCookie'] is String ? cookie['douyuCookie'] as String : ''),
       'douyinCookie': cookie['douyinCookie'] ?? '',
       'kuaishouCookie': cookie['kuaishouCookie'] ?? '',
       'bilibiliUid': cookie['bilibiliUid'] ?? 0,
