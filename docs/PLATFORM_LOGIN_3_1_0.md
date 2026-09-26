@@ -128,3 +128,18 @@ master/开发分支。[最终Mac云构建 36248835900](https://github.com/shizuo
 - [最终Android运行 36251790710](https://github.com/shizuon/pure_live/actions/runs/36251790710)
   已在最终Mac下载核验后启动，仅Android测试签名；ref后续仅有文档差异。
   后续Windows、Linux、iOS仍待串行构建和核验；全平台Release尚未发布。
+
+- 最终Android运行 `36251790710` 成功，源码 `24fc81c6415c4f3aee77eb0560e6aed10589bc09`
+  与最终Mac业务源码仅文档不同。云端包内容验证（1261个Flutter资源）、v2签名、
+  manifest `3.1.0 / versionCode=6113 / Flutter build=4113` 通过。
+  下载后SHA、ZIP CRC、唯一 `arm64-v8a`、版本资源及Flutter/App原生库通过。
+- [最终Android测试附件](https://github.com/shizuon/pure_live/actions/runs/36251790710/artifacts/10909151670)
+  截止 `2026-09-29 15:27:25 UTC`；临时测试签名，不是正式升级包。
+  `PureLive-3.1.0-4113-android-arm64-v8a-test-signed.apk`：118799847字节，
+  SHA256 `645501b046ba46365ddeb0aaba1236651b470dd2e1700ca23e31ec1fd7a1f092`；
+  证书SHA256 `3e3e3bac96e3342e119f5734607d1da859eeaa49660d677e8994c8d7ccd11d76`。
+  本机产物及验证JSON位于 `local-artifacts/cloud-final-android-3.1.0/`，
+  云日志为 `local-artifacts/cloud-final-android-3.1.0.log`；未安装或操作设备。
+- [最终Windows运行 36252815489](https://github.com/shizuon/pure_live/actions/runs/36252815489)
+  已在Android下载核验后启动，仅Windows开启；须安装器/便携包及云端重新下载验证
+  全部成功后再继续Linux、iOS。全平台Release仍未发布。
