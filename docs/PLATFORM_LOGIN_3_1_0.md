@@ -81,3 +81,20 @@ SOOP/CC等仅有证据缺口的平台不随意改取流参数；已有公开流�
   正常引用、历史与用户文件未删除。另出现未跟踪 `assets/version 2.json`，保留不提交。
 
 最终完整回归和源码合并已完成；各平台产物SHA及Release地址尚待补齐。
+
+## 云端已完成阶段
+
+- Mac运行 `36240491330` 成功，云端完整Flutter **581项通过**，包验证通过。
+  下载后再确认 `3.1.0 (4113)`、主程序 `x86_64 arm64`、ZIP CRC、两包SHA256、
+  `bash tool/verify_dmg.sh` 均成功；没有安装、挂载或启动应用。
+- [Mac候选附件](https://github.com/shizuon/pure_live/actions/runs/36240491330/artifacts/10906552005)
+  有效期至 `2026-09-29 12:37:53 UTC`。最终仍将上传到统一Release作为稳定下载入口。
+- `PureLive-3.1.0-4113-macos-universal.dmg`：122279188字节，
+  SHA256 `0d036bcd55023dba953927225eb27356524787cb316dfe2af4a339e7d659efba`。
+- `PureLive-3.1.0-4113-macos-universal.zip`：106646422字节，
+  SHA256 `b5b5f8208584430dd549e9944b217622b1d92de3164822abb88a909db940124c`。
+- 本机忽略目录 `local-artifacts/cloud-macos-3.1.0/` 保存产物与验证JSON；
+  `local-artifacts/cloud-macos-3.1.0.log` 保存云端完整日志。
+- [Android运行 36243216645](https://github.com/shizuon/pure_live/actions/runs/36243216645)
+  已在Mac核验后启动，仅Android测试签名。所用分支较Mac业务SHA仅有交付文档变更。
+  Android完成核验后继续Windows、Linux、iOS；尚未发布Release。
