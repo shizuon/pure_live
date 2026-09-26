@@ -140,31 +140,42 @@ void main() {
     expect(endpoints.length, connectionCount, reason: 'manual close must cancel watchdog reconnects');
   });
 
-  test('incoming heartbeat traffic keeps one connection alive', () async {
-    late _FakeWebSocketChannel channel;
-    var connectionCount = 0;
-    final socket = WebScoketUtils(
-      url: 'wss://primary.example/ws',
-      heartBeatTime: 10,
-      inactivityTimeout: const Duration(milliseconds: 40),
-      reconnectBaseDelay: const Duration(milliseconds: 5),
-      connector: (endpoint, {connectTimeout, protocols, headers}) {
-        connectionCount++;
-        channel = _FakeWebSocketChannel();
-        return channel;
-      },
-    );
+  test('incoming heartbeat traffic keeps one connection alive', () {
+    fakeAsync((async) {
+      late _FakeWebSocketChannel channel;
+      var connectionCount = 0;
+      final socket = WebScoketUtils(
+        url: 'wss://primary.example/ws',
+        heartBeatTime: 10,
+        inactivityTimeout: const Duration(milliseconds: 40),
+        reconnectBaseDelay: const Duration(milliseconds: 5),
+        now: () => DateTime(2026).add(async.elapsed),
+        connector: (endpoint, {connectTimeout, protocols, headers}) {
+          connectionCount++;
+          channel = _FakeWebSocketChannel();
+          return channel;
+        },
+      );
 
-    await socket.connect();
-    for (var index = 0; index < 4; index++) {
-      await Future<void>.delayed(const Duration(milliseconds: 15));
-      channel.incoming.add('heartbeat-$index');
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+      unawaited(socket.connect());
+      async.flushMicrotasks();
+      for (var index = 0; index < 4; index++) {
+        async.elapse(const Duration(milliseconds: 15));
+        channel.incoming.add('heartbeat-$index');
+        async.flushMicrotasks();
+      }
+      async.elapse(const Duration(milliseconds: 20));
 
-    expect(connectionCount, 1);
-    expect(socket.status, SocketStatus.connected);
-    await socket.close();
+      expect(connectionCount, 1);
+      expect(socket.status, SocketStatus.connected);
+      // Crossing the actual inactivity deadline must still schedule recovery.
+      async.elapse(const Duration(milliseconds: 20));
+      async.flushMicrotasks();
+      expect(socket.status, SocketStatus.failed);
+      expect(socket.reconnectTimer?.isActive, isTrue);
+      unawaited(socket.close());
+      async.flushMicrotasks();
+    });
   });
 }
 

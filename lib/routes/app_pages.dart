@@ -1,4 +1,7 @@
 import 'package:pure_live/common/index.dart';
+import 'package:pure_live/modules/account/platform_account_page.dart';
+import 'package:pure_live/modules/account/platform_web_login_page.dart';
+import 'package:pure_live/modules/account/platform_login_profile.dart';
 import 'package:pure_live/modules/home/home_page.dart';
 import 'package:pure_live/modules/auth/mine_page.dart';
 import 'package:pure_live/modules/iptv/iptv_page.dart';
@@ -28,7 +31,6 @@ import 'package:pure_live/modules/tags/tag_management_page.dart';
 import 'package:pure_live/modules/hot_areas/hot_areas_page.dart';
 import 'package:pure_live/modules/shield/danmu_shield_page.dart';
 import 'package:pure_live/modules/multiview/multiview_page.dart';
-import 'package:pure_live/modules/account/yy/yy_cookie_page.dart';
 import 'package:pure_live/modules/search/web_search_binding.dart';
 import 'package:pure_live/modules/settings/settings_binding.dart';
 import 'package:pure_live/modules/areas/favorite_areas_page.dart';
@@ -36,28 +38,15 @@ import 'package:pure_live/modules/area_rooms/area_rooms_page.dart';
 import 'package:pure_live/modules/tags/tag_management_binding.dart';
 import 'package:pure_live/modules/hot_areas/hot_areas_binding.dart';
 import 'package:pure_live/modules/shield/danmu_shield_binding.dart';
-import 'package:pure_live/modules/account/yy/yy_cookie_binding.dart';
 import 'package:pure_live/modules/areas/favorite_areas_binding.dart';
-import 'package:pure_live/modules/account/soop/soop_cookie_page.dart';
-import 'package:pure_live/modules/account/huya/huya_cookie_page.dart';
 import 'package:pure_live/modules/area_rooms/area_rooms_binding.dart';
 import 'package:pure_live/recorder/pages/recorder/recorder_page.dart';
 import 'package:pure_live/modules/account/bilibili/qr_login_page.dart';
 import 'package:pure_live/modules/live_play/pages/live_play_page.dart';
 import 'package:pure_live/modules/account/bilibili/bilibili_bings.dart';
-import 'package:pure_live/modules/account/bilibili/web_login_page.dart';
-import 'package:pure_live/modules/account/soop/soop_cookie_binding.dart';
-import 'package:pure_live/modules/account/huya/huya_cookie_binding.dart';
 import 'package:pure_live/recorder/pages/recorder/recorder_binding.dart';
-import 'package:pure_live/modules/account/twitch/twitch_cookie_page.dart';
-import 'package:pure_live/modules/account/douyin/douyin_cookie_page.dart';
-import 'package:pure_live/modules/account/douyu/douyu_cookie_page.dart';
-import 'package:pure_live/modules/account/twitch/twitch_cookie_binding.dart';
 import 'package:pure_live/modules/live_play/bindings/live_play_binding.dart';
 import 'package:pure_live/modules/multiview/bindings/multiview_binding.dart';
-import 'package:pure_live/modules/account/douyin/douyin_cookie_binding.dart';
-import 'package:pure_live/modules/account/kuaishou/kuaishou_cookie_page.dart';
-import 'package:pure_live/modules/account/kuaishou/kuaishou_cookie_binding.dart';
 import 'package:pure_live/recorder/pages/record_settings/record_settings_page.dart';
 import 'package:pure_live/recorder/pages/record_settings/record_settings_binding.dart';
 
@@ -110,8 +99,10 @@ class AppPages {
     //哔哩哔哩Web登录
     GetPage(
       name: RoutePath.kBiliBiliWebLogin,
-      page: _smoothPage(() => const BiliBiliWebLoginPage()),
-      bindings: [BilibiliWebLoginBinding()],
+      page: _smoothPage(() => PlatformWebLoginPage(
+        profile: PlatformLoginProfile.of('bilibili'),
+        onSave: (value) => SettingsService.to.cookieManager.setAccountCookie('bilibili', value),
+      )),
     ),
     //哔哩哔哩二维码登录
     GetPage(
@@ -142,30 +133,26 @@ class AppPages {
 
     GetPage(
       name: RoutePath.kHuyaCookie,
-      page: _smoothPage(() => const HuyaCookiePage()),
-      bindings: [HuyaCookieBinding()],
+      page: _smoothPage(() => const PlatformAccountPage(platform: 'huya')),
     ),
 
     GetPage(
       name: RoutePath.kDouyuCookie,
-      page: _smoothPage(() => const DouyinCookiePage()),
-      bindings: [DouyinCookieBinding()],
+      page: _smoothPage(() => const PlatformAccountPage(platform: 'douyin')),
     ),
-    GetPage(name: RoutePath.kDouyuAccountCookie, page: _smoothPage(() => const DouyuCookiePage())),
+    GetPage(name: RoutePath.kDouyuAccountCookie, page: _smoothPage(() => const PlatformAccountPage(platform: 'douyu'))),
 
     GetPage(
       name: RoutePath.kTwitchCookie,
-      page: _smoothPage(() => const TwitchCookiePage()),
-      bindings: [TwitchCookieBinding()],
+      page: _smoothPage(() => const PlatformAccountPage(platform: 'twitch')),
     ),
-    GetPage(name: RoutePath.kYyCookie, page: _smoothPage(() => const YyCookiePage()), bindings: [YyCookieBinding()]),
+    GetPage(name: RoutePath.kYyCookie, page: _smoothPage(() => const PlatformAccountPage(platform: 'yy'))),
 
-    GetPage(name: RoutePath.kSoop, page: _smoothPage(() => const SoopCookiePage()), bindings: [SoopCookieBinding()]),
+    GetPage(name: RoutePath.kSoop, page: _smoothPage(() => const PlatformAccountPage(platform: 'soop'))),
 
     GetPage(
       name: RoutePath.kKuaishouCookie,
-      page: _smoothPage(() => const KuaishouCookiePage()),
-      bindings: [KuaishouCookieBinding()],
+      page: _smoothPage(() => const PlatformAccountPage(platform: 'kuaishou')),
     ),
 
     GetPage(name: RoutePath.kWebDavPage, page: _smoothPage(WebDavPage.new), bindings: [WebDavBinding()]),

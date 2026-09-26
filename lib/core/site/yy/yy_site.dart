@@ -12,7 +12,7 @@ import 'package:pure_live/core/interface/live_danmaku.dart';
 import 'package:pure_live/modules/live_play/controllers/player_controller.dart';
 import 'package:pure_live/core/utils/live_quality_label.dart';
 
-class YYSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomResolver {
+class YYSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomResolver, LivePlayUrlResolver {
   static const String _streamSdkVersion = '5.23.0-beta.2';
   static const String _mobileHlsPrefix = 'mobile-hls:';
   static const List<String> _mobileHlsRates = <String>['1200', '4000'];
@@ -499,29 +499,52 @@ class YYSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomResol
 
   @override
   Future<List<String>> getPlayUrls({required LiveRoom detail, required LivePlayQuality quality}) async {
+    return (await resolvePlayUrlsRaw(detail: detail, quality: quality)).urls;
+  }
+
+  @override
+  Future<LivePlayUrlResolution> resolvePlayUrlsRaw({required LiveRoom detail, required LivePlayQuality quality}) async {
     final qn = quality.data?.toString() ?? '';
 
     if (qn.isEmpty) {
-      return [];
+      return const LivePlayUrlResolution(urls: []);
     }
 
     if (qn.startsWith(_mobileHlsPrefix)) {
       final rate = qn.substring(_mobileHlsPrefix.length);
       final payload = await _getMobileHlsStream(detail: detail, rate: rate);
-      final url = payload?['hls']?.toString().trim() ?? '';
-      return url.isEmpty ? const <String>[] : <String>[url];
+      return mobileHlsResolution(payload, rate: rate);
     }
 
     try {
       final urls = parsePlayUrls(await getLiveStreamObj(detail: detail, qn: qn));
-      if (urls.isNotEmpty) return urls;
+      if (urls.isNotEmpty) {
+        return LivePlayUrlResolution(urls: urls, appliedQualityData: quality.selectionId);
+      }
     } catch (error) {
       CoreLog.w('YY stream URL request failed; retrying through mobile HLS: $error');
     }
     final fallbackRate = quality.sort >= 2000 ? _mobileHlsRates.last : _mobileHlsRates.first;
     final payload = await _getMobileHlsStream(detail: detail, rate: fallbackRate);
+    return mobileHlsResolution(payload, rate: fallbackRate);
+  }
+
+  @visibleForTesting
+  static LivePlayUrlResolution mobileHlsResolution(Map<String, dynamic>? payload, {required String rate}) {
     final url = payload?['hls']?.toString().trim() ?? '';
-    return url.isEmpty ? const <String>[] : <String>[url];
+    if (url.isEmpty) return const LivePlayUrlResolution(urls: []);
+    final width = _asInt(payload?['width']) ?? 0;
+    final height = _asInt(payload?['height']) ?? 0;
+    final shortEdge = width > 0 && height > 0 ? (width < height ? width : height) : 0;
+    // Include acknowledged dimensions in identity: a refreshed mobile stream
+    // can change resolution without changing its requested mobile rate.
+    final id = 'yy-mobile:$rate:${width}x$height';
+    final label = shortEdge > 0 ? '${shortEdge}P · HLS' : i18n('quality_unconfirmed');
+    return LivePlayUrlResolution(
+      urls: [url],
+      appliedQualityData: id,
+      unlistedQuality: LivePlayQuality(quality: label, id: id, data: '$_mobileHlsPrefix$rate'),
+    );
   }
 
   @visibleForTesting

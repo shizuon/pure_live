@@ -55,7 +55,7 @@ on:
         description: Release tag (e.g. v1.0.0) – required if create_release is true
         required: true
         type: string
-        default: 'v3.0.24'
+        default: 'v3.1.0'
 
   push:
     tags:
@@ -1172,7 +1172,7 @@ jobs:
           test -f "PureLive-${VERSION}-macos-universal.dmg"
 
           unzip -tq "PureLive-${VERSION}-macos-universal.zip"
-          hdiutil verify "PureLive-${VERSION}-macos-universal.dmg"
+          bash tool/verify_dmg.sh "PureLive-${VERSION}-macos-universal.dmg"
 
           echo "=== macOS packages ==="
 

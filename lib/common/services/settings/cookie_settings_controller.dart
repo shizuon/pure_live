@@ -15,6 +15,20 @@ class CookieSettingsController extends GetxController {
   final RxString twitchCookie = hiveString('twitchCookie', '');
   final RxString soopCookie = hiveString('soopCookie', '');
   final RxString yyCookie = hiveString('yyCookie', '');
+
+  RxString accountCookie(String platform) => switch (platform) {
+    'bilibili' => bilibiliCookie,
+    'huya' => huyaCookie,
+    'douyu' => douyuCookie,
+    'douyin' => douyinCookie,
+    'kuaishou' => kuaishouCookie,
+    'twitch' => twitchCookie,
+    'soop' => soopCookie,
+    'yy' => yyCookie,
+    _ => throw ArgumentError.value(platform, 'platform'),
+  };
+
+  void setAccountCookie(String platform, String value) => accountCookie(platform).value = normalizeDouyuCookie(value);
   void clearAllCookies() {
     bilibiliCookie.v = '';
     huyaCookie.v = '';
@@ -28,33 +42,20 @@ class CookieSettingsController extends GetxController {
   }
 
   Map<String, dynamic> toJson() {
-    // Douyu web-login sessions stay local, including legacy export paths that
-    // opt into serializing other platforms' sensitive account settings.
-    return {
-      'bilibiliCookie': bilibiliCookie.v,
-      'huyaCookie': huyaCookie.v,
-      'douyinCookie': douyinCookie.v,
-      'kuaishouCookie': kuaishouCookie.v,
-      'bilibiliUid': bilibiliUid.v,
-      'twitchCookie': twitchCookie.v,
-      'soopCookie': soopCookie.v,
-      'yyCookie': yyCookie.v,
-    };
+    // Web-login sessions belong to this device, not settings backups. Hive
+    // persists them separately. Legacy explicit imports remain supported.
+    return {};
   }
 
   void fromJson(Map<String, dynamic> json) {
-    bilibiliCookie.v = json['bilibiliCookie'] ?? '';
-    huyaCookie.v = json['huyaCookie'] ?? '';
-    setDouyuCookie(json['douyuCookie'] is String ? json['douyuCookie'] as String : '');
-    douyinCookie.v = json['douyinCookie'] ?? '';
-    kuaishouCookie.v = json['kuaishouCookie'] ?? '';
-    bilibiliUid.v = json['bilibiliUid'] ?? 0;
-    twitchCookie.v = json['twitchCookie'] ?? '';
-    soopCookie.v = json['soopCookie'] ?? '';
-    yyCookie.v = json['yyCookie'] ?? '';
-
-    BiliBiliAccountService.instance.setCookie(bilibiliCookie.v);
-    BiliBiliAccountService.instance.loadUserInfo();
+    for (final platform in ['bilibili', 'huya', 'douyu', 'douyin', 'kuaishou', 'twitch', 'soop', 'yy']) {
+      final key = '${platform}Cookie';
+      if (json.containsKey(key)) setAccountCookie(platform, json[key] is String ? json[key] as String : '');
+    }
+    if (json.containsKey('bilibiliUid')) bilibiliUid.v = (json['bilibiliUid'] as num?)?.toInt() ?? 0;
+    if (json.containsKey('bilibiliCookie') && Get.isRegistered<BiliBiliAccountService>()) {
+      BiliBiliAccountService.instance.loadUserInfo();
+    }
   }
 
   static Map<String, dynamic> extractConfig(Map<String, dynamic>? rootConfig) {

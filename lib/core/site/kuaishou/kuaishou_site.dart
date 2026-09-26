@@ -180,42 +180,43 @@ class KuaishowSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
   /// represent CDN lines, so URLs of the same quality are merged and deduped.
   static List<LivePlayQuality> parsePlayQualities(dynamic raw) {
     final descriptors = raw is List ? raw : <dynamic>[raw];
-    final merged = <String, ({String name, int sort, List<String> urls})>{};
+    final merged = <String, ({String name, int sort, int codecRank, List<String> urls})>{};
 
     for (final rawDescriptor in descriptors) {
       if (rawDescriptor is! Map) continue;
-      dynamic descriptor = rawDescriptor;
-
-      // Prefer AVC for broad hardware compatibility. HEVC is a fallback when
-      // the platform omits AVC rather than an additional duplicate quality set.
+      final codecGroups = <({dynamic descriptor, int rank})>[];
       for (final codec in const ['h264', 'avc', 'hevc', 'h265']) {
-        final candidate = rawDescriptor[codec];
-        if (_representationsOf(candidate).isNotEmpty) {
-          descriptor = candidate;
-          break;
+        if (_representationsOf(rawDescriptor[codec]).isNotEmpty) {
+          codecGroups.add((descriptor: rawDescriptor[codec], rank: codec == 'h264' || codec == 'avc' ? 0 : 1));
         }
       }
-
-      for (final item in _representationsOf(descriptor)) {
-        if (item is! Map) continue;
-        final url = item['url']?.toString().trim() ?? '';
-        if (Uri.tryParse(url)?.isAbsolute != true || (!url.startsWith('http://') && !url.startsWith('https://'))) {
-          continue;
-        }
-        final sort = _asInt(item['level']) ?? _asInt(item['bitrate']) ?? 0;
-        final name = item['name']?.toString().trim().isNotEmpty == true
-            ? item['name'].toString().trim()
-            : item['shortName']?.toString().trim().isNotEmpty == true
-            ? item['shortName'].toString().trim()
-            : item['qualityType']?.toString().trim().isNotEmpty == true
-            ? item['qualityType'].toString().trim()
-            : '清晰度 $sort';
-        final key = '$name\u0000$sort';
-        final existing = merged[key];
-        if (existing == null) {
-          merged[key] = (name: name, sort: sort, urls: <String>[url]);
-        } else if (!existing.urls.contains(url)) {
-          existing.urls.add(url);
+      if (codecGroups.isEmpty) codecGroups.add((descriptor: rawDescriptor, rank: 0));
+      // Prefer AVC per semantic tier, retaining HEVC-exclusive higher tiers.
+      // Bitrate is not the identity: AVC and HEVC bitrates differ at the same
+      // quality. Keep the platform name/level for a stable cross-codec key.
+      for (final group in codecGroups) {
+        for (final item in _representationsOf(group.descriptor)) {
+          if (item is! Map) continue;
+          final url = item['url']?.toString().trim() ?? '';
+          if (Uri.tryParse(url)?.isAbsolute != true || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+            continue;
+          }
+          final sort = _asInt(item['level']) ?? _asInt(item['bitrate']) ?? 0;
+          final name = item['name']?.toString().trim().isNotEmpty == true
+              ? item['name'].toString().trim()
+              : item['shortName']?.toString().trim().isNotEmpty == true
+              ? item['shortName'].toString().trim()
+              : item['qualityType']?.toString().trim().isNotEmpty == true
+              ? item['qualityType'].toString().trim()
+              : '清晰度 $sort';
+          final level = _asInt(item['level']);
+          final key = '$name\u0000${level ?? ''}';
+          final existing = merged[key];
+          if (existing == null || group.rank < existing.codecRank) {
+            merged[key] = (name: name, sort: sort, codecRank: group.rank, urls: <String>[url]);
+          } else if (group.rank == existing.codecRank && !existing.urls.contains(url)) {
+            existing.urls.add(url);
+          }
         }
       }
     }

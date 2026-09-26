@@ -1,51 +1,51 @@
 {
-  "version": "3.0.24",
-  "build_number": 4112,
-  "version_num": 300244112,
+  "version": "3.1.0",
+  "build_number": 4113,
+  "version_num": 301004113,
   "android_abis": ["arm64-v8a"],
-  "version_desc": "3.0.24 Mac 候选：斗鱼官方网页登录自动保存会话，修正原画请求实际降档却仍标为1080P60的问题。登录后原画和持续播放待实机验证。",
+  "version_desc": "3.1.0：整理官方网页登录和账号退出，修正YY回退、B站菜单外实际画质、抖音会话缓存、快手编码档位和HLS标签。各平台产物及实机边界见交付记录。",
   "prerelease": true,
   "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
   "platforms": {
     "android": {
-      "version": "3.0.23",
-      "build_number": 4111,
-      "version_num": 300234111,
-      "version_desc": "Kick / YouTube 与 Twitch 修复候选，保留移动双流；APK 以 Actions 实际产物为准，尚待实机验证。",
+      "version": "3.1.0",
+      "build_number": 4113,
+      "version_num": 301004113,
+      "version_desc": "3.1.0 Android arm64候选，含共用TV模式；正式签名尚需仓库密钥，测试APK不能视为正式升级包。构建及设备验证以交付记录为准。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
       "android_abis": ["arm64-v8a"]
     },
     "windows": {
-      "version": "3.0.19",
-      "build_number": 4107,
-      "version_num": 300194107,
-      "version_desc": "3.0.19 测试版：清理重复设置调度，录制按需启动，B 从最低画质按需解析；保留桌面卡顿、斗鱼弹幕重连和裁剪覆盖修复。",
+      "version": "3.1.0",
+      "build_number": 4113,
+      "version_num": 301004113,
+      "version_desc": "3.1.0 Windows x64候选，EXE安装器与便携包；网页登录需WebView2。构建及设备验证以交付记录为准。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
       "windows_msix_available": false
     },
     "linux": {
-      "version": "3.0.15",
-      "build_number": 4103,
-      "version_num": 300154103,
-      "version_desc": "本轮未发布 Linux 安装包",
-      "prerelease": false,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.0.15"
+      "version": "3.1.0",
+      "build_number": 4113,
+      "version_num": 301004113,
+      "version_desc": "3.1.0 Linux x64候选；现有插件无内嵌网页登录，B站可扫码，其他平台保留高级会话入口。构建状态以交付记录为准。",
+      "prerelease": true,
+      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },
     "macos": {
-      "version": "3.0.24",
-      "build_number": 4112,
-      "version_num": 300244112,
-      "version_desc": "斗鱼官方网页登录、扫码入口和实际画质回传候选；保留双流、覆盖与硬解设置。真实账号及60帧持续播放待验证。",
+      "version": "3.1.0",
+      "build_number": 4113,
+      "version_num": 301004113,
+      "version_desc": "3.1.0 Mac Universal候选，网页登录与实际画质改进；保留双流、覆盖、校准和硬解。构建及实机验证以交付记录为准。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },
     "ios": {
-      "version": "3.0.23",
-      "build_number": 4111,
-      "version_num": 300234111,
-      "version_desc": "Kick / YouTube 与 Twitch 修复候选，保留移动双流；普通未签名 IPA 自行签名，尚待实机验证。",
+      "version": "3.1.0",
+      "build_number": 4113,
+      "version_num": 301004113,
+      "version_desc": "3.1.0 iOS/iPadOS普通未签名IPA候选，由用户自行签名。网页登录、原画权限及设备播放待实测。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     }

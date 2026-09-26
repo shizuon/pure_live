@@ -1,217 +1,73 @@
-import 'package:remixicon/remixicon.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/modules/account/account_controller.dart';
 import 'package:pure_live/common/services/settings/bilibili_account_service.dart';
+
+import 'platform_account_page.dart';
+import 'platform_login_profile.dart';
 
 class AccountPage extends GetView<AccountController> {
   const AccountPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final cookie = controller.cookie;
-
-    return Scaffold(
-      appBar: AppBar(title: Text(i18n('third_party_auth'))),
-      body: ListView(
-        physics: const PureLiveScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        children: [
-          context.buildGroupTitle(i18n('third_party_auth')),
-          context.buildModernCard([
-            Obx(() {
-              final isLogined = BiliBiliAccountService.instance.logined.v;
-              final accountName = BiliBiliAccountService.instance.name.v;
-              return _buildAccountTile(
-                context,
-                logo: 'assets/images/bilibili_2.png',
-                title: i18n("site_bilibili"),
-                subtitle: isLogined ? accountName : i18n("not_logged_in"),
-                isLogined: isLogined,
-                onTap: () => isLogined ? _showLogoutDialog(context) : controller.bilibiliTap(),
-              );
-            }),
-
-            Obx(() {
-              final isLogined = cookie.huyaCookie.v.isNotEmpty;
-              return _buildAccountTile(
-                context,
-                logo: 'assets/images/huya.png',
-                title: i18n("site_huya"),
-                subtitle: isLogined ? i18n("logined") : i18n("set_cookie"),
-                isLogined: isLogined,
-                onTap: () => isLogined
-                    ? _showPlatformLogoutDialog(context, () => cookie.huyaCookie.v = "")
-                    : Get.toNamed(RoutePath.kHuyaCookie),
-              );
-            }),
-            Obx(() {
-              final isLogined = cookie.yyCookie.v.isNotEmpty;
-              return _buildAccountTile(
-                context,
-                logo: 'assets/images/yy.png',
-                title: i18n("site_yy"),
-                subtitle: isLogined ? i18n("logined") : i18n("set_cookie"),
-                isLogined: isLogined,
-                onTap: () => isLogined
-                    ? _showPlatformLogoutDialog(context, () => cookie.yyCookie.v = "")
-                    : Get.toNamed(RoutePath.kYyCookie),
-              );
-            }),
-            Obx(() {
-              final isLogined = cookie.douyinCookie.v.isNotEmpty;
-              return _buildAccountTile(
-                context,
-                logo: 'assets/images/douyin.png',
-                title: i18n("site_douyin"),
-                subtitle: isLogined
-                    ? controller.douyinNickName.value.isNotEmpty
-                          ? controller.douyinNickName.value
-                          : i18n("logined")
-                    : i18n("set_cookie"),
-                isLogined: isLogined,
-                onTap: () => isLogined
-                    ? _showPlatformLogoutDialog(context, () => cookie.douyinCookie.v = "")
-                    : Get.toNamed(RoutePath.kDouyuCookie),
-              );
-            }),
-
-            Obx(() {
-              final isLogined = cookie.kuaishouCookie.v.isNotEmpty;
-              return _buildAccountTile(
-                context,
-                logo: 'assets/images/kuaishou.png',
-                title: i18n("site_kuaishou"),
-                subtitle: isLogined ? i18n("logined") : i18n("set_cookie"),
-                isLogined: isLogined,
-                onTap: () => isLogined
-                    ? _showPlatformLogoutDialog(context, () => cookie.kuaishouCookie.v = "")
-                    : Get.toNamed(RoutePath.kKuaishouCookie),
-              );
-            }),
-            Obx(() {
-              final isLogined = cookie.twitchCookie.v.isNotEmpty;
-              return _buildAccountTile(
-                context,
-                logo: 'assets/images/twitch.png',
-                title: i18n("site_twitch"),
-                subtitle: isLogined ? i18n("logined") : i18n("set_cookie"),
-                isLogined: isLogined,
-                onTap: () => isLogined
-                    ? _showPlatformLogoutDialog(context, () => cookie.twitchCookie.v = "")
-                    : Get.toNamed(RoutePath.kTwitchCookie),
-              );
-            }),
-            Obx(() {
-              final isLogined = cookie.soopCookie.v.isNotEmpty;
-              return _buildAccountTile(
-                context,
-                logo: 'assets/images/soop.png',
-                title: i18n("site_soop"),
-                subtitle: isLogined ? i18n("logined") : i18n("set_cookie"),
-                isLogined: isLogined,
-                onTap: () => isLogined
-                    ? _showPlatformLogoutDialog(context, () => cookie.soopCookie.v = "")
-                    : Get.toNamed(RoutePath.kSoop),
-              );
-            }),
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(i18n('third_party_auth'))),
+    body: ListView(
+      physics: const PureLiveScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      children: [
+        context.buildGroupTitle(i18n('third_party_auth')),
+        context.buildModernCard([
+          Obx(() {
+            final service = BiliBiliAccountService.instance;
+            return ListTile(
+              leading: Image.asset('assets/images/bilibili_2.png', width: 24, height: 24),
+              title: Text(i18n('site_bilibili')),
+              subtitle: Text(service.logined.value ? service.name.value : i18n('qr_login')),
+              trailing: IconButton(
+                tooltip: service.logined.value ? i18n('logout') : i18n('qr_login'),
+                icon: Icon(service.logined.value ? Icons.logout : Icons.qr_code),
+                onPressed: () => service.logined.value ? _logoutBilibili(context) : controller.bilibiliTap(),
+              ),
+              onTap: () =>
+                  Navigator.of(context)
+                      .push(MaterialPageRoute(builder: (_) => const PlatformAccountPage(platform: 'bilibili'))),
+            );
+          }),
+          for (final profile in PlatformLoginProfile.profiles.where((p) => p.id != 'bilibili'))
             Obx(
-              () => _buildAccountTile(
-                context,
-                logo: 'assets/images/douyu.png',
-                title: i18n("site_douyu"),
-                subtitle: cookie.douyuCookie.value.isEmpty ? i18n("douyu_login") : i18n('douyu_cookie_stored'),
-                isLogined: false,
-                onTap: () => Get.toNamed(RoutePath.kDouyuAccountCookie),
+              () => ListTile(
+                key: ValueKey('account-${profile.id}'),
+                leading: Image.asset('assets/images/${profile.id}.png', width: 24, height: 24),
+                title: Text(profile.name),
+                subtitle: Text(
+                  controller.cookie.accountCookie(profile.id).value.isEmpty
+                      ? i18n('platform_sign_in', args: {'name': profile.name})
+                      : i18n('platform_session_saved'),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () =>
+                    Navigator.of(context)
+                        .push(MaterialPageRoute(builder: (_) => PlatformAccountPage(platform: profile.id))),
               ),
             ),
-          ]),
-          const SizedBox(height: 32),
-        ],
-      ),
-    );
-  }
+          ListTile(title: const Text('Kick · YouTube · CC · IPTV'), subtitle: Text(i18n('platform_anonymous_only'))),
+        ]),
+      ],
+    ),
+  );
 
-  Widget _buildAccountTile(
-    BuildContext context, {
-    required String logo,
-    required String title,
-    required String subtitle,
-    required bool isLogined,
-    required VoidCallback onTap,
-    bool isEnabled = true,
-  }) {
-    final theme = Theme.of(context);
-    return ListTile(
-      enabled: isEnabled,
-      leading: Image.asset(logo, width: 24, height: 24),
-      title: Text(
-        title,
-        style: AppTextStyles.t15.copyWith(fontWeight: FontWeight.w600, color: isEnabled ? null : theme.disabledColor),
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Text(
-          subtitle,
-          style: AppTextStyles.t12.copyWith(
-            color: isLogined ? theme.colorScheme.primary : theme.hintColor.withValues(alpha: 0.75),
-            fontWeight: isLogined ? FontWeight.w500 : FontWeight.normal,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-      trailing: isLogined
-          ? GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Icon(Remix.logout_box_r_line, color: theme.colorScheme.error.withValues(alpha: 0.8), size: 18),
-              ),
-            )
-          : Icon(Icons.chevron_right_rounded, color: theme.hintColor.withValues(alpha: 0.4), size: 20),
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-    );
-  }
-
-  void _showLogoutDialog(BuildContext context) {
-    showDialog(
+  Future<void> _logoutBilibili(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(i18n("logout")),
-        content: Text(i18n("confirm_logout")),
+      builder: (dialogContext) => AlertDialog(
+        title: Text(i18n('logout')),
+        content: Text(i18n('confirm_logout')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(i18n("cancel"))),
-          TextButton(
-            onPressed: () {
-              BiliBiliAccountService.instance.logout();
-              Navigator.pop(context);
-            },
-            child: Text(i18n("confirm"), style: const TextStyle(color: Colors.red)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(i18n('cancel'))),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(i18n('confirm'))),
         ],
       ),
     );
-  }
-
-  void _showPlatformLogoutDialog(BuildContext context, VoidCallback onConfirm) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(i18n("logout")),
-        content: Text(i18n("confirm_logout")),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(i18n("cancel"))),
-          TextButton(
-            onPressed: () {
-              onConfirm();
-              Navigator.pop(context);
-            },
-            child: Text(i18n("confirm"), style: const TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
+    if (confirmed == true) await BiliBiliAccountService.instance.logout();
   }
 }

@@ -31,7 +31,8 @@ class DouyinSite implements LiveSite, LiveSiteRecordRoomResolver {
 
   static const String kDefaultAuthority = "live.douyin.com";
 
-  /// 用户设置的 cookie
+  /// Anonymous bootstrap only. Account cookies are always read from settings
+  /// and must never be retained here after logout.
   static String cookie = "";
   static Future<String>? _anonymousCookieRequest;
 
@@ -43,15 +44,18 @@ class DouyinSite implements LiveSite, LiveSiteRecordRoomResolver {
 
   Future<Map<String, dynamic>> getRequestHeaders() async {
     try {
+      final account = SettingsService.to.cookieManager.douyinCookie.value.trim();
+      if (account.isNotEmpty) return {...headers, 'cookie': account};
       if (cookie.isNotEmpty) {
-        return {...headers, "cookie": cookie};
-      } else if (SettingsService.to.cookieManager.douyinCookie.v.isNotEmpty) {
-        cookie = SettingsService.to.cookieManager.douyinCookie.v;
         return {...headers, "cookie": cookie};
       }
 
-      final anonymousCookie = await (_anonymousCookieRequest ??= _fetchAnonymousCookie());
-      _anonymousCookieRequest = null;
+      final request = _anonymousCookieRequest ??= _fetchAnonymousCookie();
+      final anonymousCookie = await request;
+      if (identical(request, _anonymousCookieRequest)) _anonymousCookieRequest = null;
+      // A login may finish while the anonymous bootstrap is in flight.
+      final latestAccount = SettingsService.to.cookieManager.douyinCookie.value.trim();
+      if (latestAccount.isNotEmpty) return {...headers, 'cookie': latestAccount};
       if (anonymousCookie.isNotEmpty) {
         cookie = anonymousCookie;
         return {...headers, "cookie": cookie};

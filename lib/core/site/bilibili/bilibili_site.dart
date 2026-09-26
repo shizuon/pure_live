@@ -261,7 +261,15 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
       if (candidate.currentQn != appliedQn || !seen.add(candidate.url)) continue;
       urls.add(candidate.url);
     }
-    return LivePlayUrlResolution(urls: List.unmodifiable(urls), appliedQualityData: appliedQn);
+    return LivePlayUrlResolution(
+      urls: List.unmodifiable(urls),
+      appliedQualityData: appliedQn,
+      unlistedQuality: LivePlayQuality(
+        quality: LiveQualityLabel.normalize(platform: Sites.bilibiliSite, rawLabel: '', id: appliedQn),
+        id: appliedQn,
+        data: appliedQn,
+      ),
+    );
   }
 
   static Map<dynamic, dynamic> _playUrlPayload(dynamic response) {

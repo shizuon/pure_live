@@ -46,6 +46,15 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
     } else {
       headers.remove('Cookie');
     }
+    // PlaybackAccessToken is authenticated with OAuth, not merely a Cookie
+    // header. Keep this scoped to Twitch GraphQL and clear it on logout.
+    final pairs = (headers['Cookie'] ?? '').split(';');
+    final auth = pairs.map((s) => s.trim()).where((s) => s.startsWith('auth-token=')).firstOrNull;
+    final token = auth?.substring('auth-token='.length).trim() ?? '';
+    headers.remove('Authorization');
+    if (token.isNotEmpty && !token.contains(RegExp(r'[\r\n]'))) {
+      headers['Authorization'] = 'OAuth $token';
+    }
   }
 
   String getDeviceId() {
@@ -256,7 +265,11 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
       final videoGroup = attributes['VIDEO'] ?? '';
       final source = videoGroup.toLowerCase() == 'chunked';
       final label = _qualityName(bandwidth, height: height, frameRate: frameRate, source: source);
-      final id = '$height:${frameRate.round()}:$bandwidth:${videoGroup.toLowerCase()}';
+      // Do not collapse 59.94/60 or AVC/HEVC/audio groups into interchangeable
+      // CDN lines. They may have different decoder and audio requirements.
+      final id =
+          '${attributes['RESOLUTION'] ?? ''}:$frameRate:$bandwidth:${videoGroup.toLowerCase()}:'
+          '${attributes['CODECS'] ?? ''}:${attributes['AUDIO'] ?? ''}:${attributes['SUBTITLES'] ?? ''}';
       final existing = grouped[id];
       if (existing == null) {
         grouped[id] = (
@@ -309,11 +322,9 @@ class TwitchSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomR
       );
     }
     if (source) return '原画';
-    if (bandwidth > 5000000) return '1080P';
-    if (bandwidth > 2500000) return '720P';
-    if (bandwidth > 1000000) return '480P';
-    if (bandwidth > 500000) return '360P';
-    return '自动';
+    // BANDWIDTH is not a resolution or frame-rate guarantee.
+    if (bandwidth > 0) return '${(bandwidth / 1000000).toStringAsFixed(2)} Mbps';
+    return i18n('quality_unconfirmed');
   }
 
   @override

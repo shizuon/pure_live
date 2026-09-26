@@ -51,6 +51,7 @@ class WebScoketUtils {
   final Duration reconnectBaseDelay;
   final Duration socketCloseTimeout;
   final WebSocketConnector connector;
+  final DateTime Function() _now;
 
   WebScoketUtils({
     required this.url,
@@ -67,8 +68,10 @@ class WebScoketUtils {
     this.reconnectBaseDelay = const Duration(seconds: 15),
     this.socketCloseTimeout = const Duration(seconds: 2),
     this.connector = _connectIoWebSocket,
+    DateTime Function()? now,
     List<String>? serverUrls,
-  }) : serverUrls = _uniqueEndpoints(url, backupUrl, serverUrls);
+  }) : _now = now ?? DateTime.now,
+       serverUrls = _uniqueEndpoints(url, backupUrl, serverUrls);
 
   WebSocketChannel? webSocket;
   Timer? heartBeatTimer;
@@ -155,7 +158,7 @@ class WebScoketUtils {
     status = SocketStatus.connected;
     reconnectTimer?.cancel();
     reconnectTimer = null;
-    _lastMessageAt = DateTime.now();
+    _lastMessageAt = _now();
 
     onReady?.call();
     if (!_manualClose && generation == _generation && status == SocketStatus.connected) _initHeartBeat();
@@ -167,7 +170,7 @@ class WebScoketUtils {
     heartBeatTimer = Timer.periodic(Duration(milliseconds: heartBeatTime), (_) {
       if (status != SocketStatus.connected) return;
       final lastMessageAt = _lastMessageAt;
-      if (lastMessageAt != null && DateTime.now().difference(lastMessageAt) >= _resolvedInactivityTimeout) {
+      if (lastMessageAt != null && _now().difference(lastMessageAt) >= _resolvedInactivityTimeout) {
         _scheduleReconnect('WebSocket heartbeat timed out');
         return;
       }
@@ -185,7 +188,7 @@ class WebScoketUtils {
 
   void receiveMessage(dynamic data) {
     reconnectTime = 0;
-    _lastMessageAt = DateTime.now();
+    _lastMessageAt = _now();
     onMessage?.call(data);
   }
 

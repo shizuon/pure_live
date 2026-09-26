@@ -6,6 +6,7 @@ import 'package:pure_live/core/interface/live_danmaku.dart';
 import 'package:pure_live/core/interface/live_site.dart';
 import 'package:pure_live/core/site/twitch/twitch_site.dart';
 import 'package:pure_live/model/live_category.dart';
+import 'package:pure_live/common/index.dart' show i18n;
 import 'package:pure_live/model/live_play_quality.dart';
 
 class KickSite extends LiveSite implements LiveSiteRoomRefresher, LiveSiteRecordRoomResolver {
@@ -167,7 +168,7 @@ class KickSite extends LiveSite implements LiveSiteRoomRefresher, LiveSiteRecord
     final qualities = TwitchSite.parseMasterPlaylist(playlist, masterUri: uri);
     if (qualities.isEmpty && playlist.trimLeft().startsWith('#EXTM3U') && playlist.contains('#EXTINF:')) {
       return [
-        LivePlayQuality(quality: '原画', id: 'source', data: [uri.toString()]),
+        LivePlayQuality(quality: i18n('quality_unconfirmed'), id: 'single-stream', data: [uri.toString()]),
       ];
     }
     if (qualities.isEmpty) throw StateError('Kick returned an invalid HLS playlist');

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/core/common/http_client.dart';
 import 'package:pure_live/common/services/settings/bilibili_account_service.dart';
@@ -13,6 +14,9 @@ class BiliBiliQRLoginController extends GetxController {
   }
 
   Timer? timer;
+  int _generation = 0;
+  bool _closed = false;
+  bool _polling = false;
 
   var qrcodeUrl = "".obs;
   var qrcodeKey = "";
@@ -26,12 +30,16 @@ class BiliBiliQRLoginController extends GetxController {
   Rx<QRStatus> qrStatus = QRStatus.loading.obs;
 
   void loadQRCode() async {
+    final generation = ++_generation;
+    timer?.cancel();
+    qrcodeKey = '';
     try {
       qrStatus.value = QRStatus.loading;
 
       var result = await HttpClient.instance.getJson(
         "https://passport.bilibili.com/x/passport-login/web/qrcode/generate",
       );
+      if (_closed || generation != _generation) return;
       if (result["code"] != 0) {
         throw result["message"];
       }
@@ -40,29 +48,37 @@ class BiliBiliQRLoginController extends GetxController {
       qrStatus.value = QRStatus.unscanned;
       startPoll();
     } catch (e) {
-      ToastUtil.show(e.toString());
+      if (_closed || generation != _generation) return;
+      ToastUtil.show(i18n('qr_load_failed'));
       qrStatus.value = QRStatus.failed;
     }
   }
 
   void startPoll() {
+    timer?.cancel();
     timer = Timer.periodic(const Duration(seconds: 3), (timer) {
       pollQRStatus();
     });
   }
 
   void pollQRStatus() async {
+    if (_closed || _polling || qrcodeKey.isEmpty) return;
+    _polling = true;
+    final generation = _generation;
+    final key = qrcodeKey;
     try {
       var response = await HttpClient.instance.get(
         "https://passport.bilibili.com/x/passport-login/web/qrcode/poll",
-        queryParameters: {"qrcode_key": qrcodeKey},
+        queryParameters: {"qrcode_key": key},
       );
+      if (_closed || generation != _generation || key != qrcodeKey) return;
       if (response.data["code"] != 0) {
         throw response.data["message"];
       }
       var data = response.data["data"];
       var code = data["code"];
       if (code == 0) {
+        timer?.cancel();
         var cookies = <String>[];
         response.headers["set-cookie"]?.forEach((element) {
           var cookie = element.split(";")[0];
@@ -72,7 +88,11 @@ class BiliBiliQRLoginController extends GetxController {
           var cookieStr = cookies.join(";");
           BiliBiliAccountService.instance.setCookie(cookieStr);
           await BiliBiliAccountService.instance.loadUserInfo();
-          Navigator.of(Get.context!).pop();
+          if (!_closed && generation == _generation && Get.currentRoute == RoutePath.kBiliBiliQRLogin) {
+            Get.back();
+          }
+        } else {
+          qrStatus.value = QRStatus.failed;
         }
       } else if (code == 86038) {
         qrStatus.value = QRStatus.expired;
@@ -82,12 +102,19 @@ class BiliBiliQRLoginController extends GetxController {
         qrStatus.value = QRStatus.scanned;
       }
     } catch (e) {
-      ToastUtil.show(e.toString());
+      if (!_closed && generation == _generation) {
+        qrStatus.value = QRStatus.failed;
+        timer?.cancel();
+      }
+    } finally {
+      _polling = false;
     }
   }
 
   @override
   void onClose() {
+    _closed = true;
+    _generation++;
     timer?.cancel();
     super.onClose();
   }
