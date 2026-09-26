@@ -53,7 +53,10 @@ void main() {
   });
   testWidgets('web login is primary and manual Cookie is collapsed advanced UI', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: DouyuCookiePage()));
-    expect(find.byKey(const ValueKey('douyu-web-login')), findsOneWidget);
+    expect(find.byKey(const ValueKey('douyu-web-login')), Platform.isLinux ? findsNothing : findsOneWidget);
+    if (Platform.isLinux) {
+      expect(find.text('douyu_login_unsupported'), findsOneWidget);
+    }
     expect(find.byKey(const ValueKey('douyu-cookie-input')), findsNothing);
     await tester.tap(find.byType(ExpansionTile));
     await tester.pumpAndSettle();
