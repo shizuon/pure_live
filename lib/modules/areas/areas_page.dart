@@ -1,4 +1,5 @@
 import 'areas_grid_view.dart';
+import 'kick_areas_page.dart';
 
 import 'package:remixicon/remixicon.dart';
 import 'package:pure_live/common/index.dart';
@@ -36,7 +37,9 @@ class AreasPage extends GetView<AreasController> {
               // Let the top platform tabs switch the outer page explicitly so
               // two same-axis gesture recognizers never fight over one drag.
               physics: const NeverScrollableScrollPhysics(),
-              children: availableSitesList.map((e) => AreaGridView(e.id)).toList(),
+              children: availableSitesList
+                  .map((e) => e.id == Sites.kickSite ? const KickAreasPage() : AreaGridView(e.id))
+                  .toList(),
             ),
             floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
             floatingActionButton: Padding(

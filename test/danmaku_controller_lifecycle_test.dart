@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
+
 import 'package:pure_live/get/get.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pure_live/common/models/live_room.dart';
@@ -10,23 +12,34 @@ import 'package:pure_live/modules/live_play/controllers/danmaku_controller.dart'
 import 'package:pure_live/modules/live_play/controllers/danmaku_session_host.dart';
 
 void main() {
-  test('a stalled transport start is bounded, stopped and available for reconnect', () async {
-    final host = _TestDanmakuHost();
-    final engine = _StalledStartDanmaku();
-    final controller = DanmakuController(
-      host,
-      startTimeout: const Duration(milliseconds: 20),
-      stopTimeout: const Duration(milliseconds: 20),
-    );
-    final room = LiveRoom(roomId: 'room-a', platform: 'test', danmakuData: const <String, dynamic>{});
-    controller.initDanmaku(engine);
+  test('a stalled transport start is bounded, stopped and available for reconnect', () {
+    fakeAsync((clock) {
+      final host = _TestDanmakuHost();
+      final engine = _StalledStartDanmaku();
+      final controller = DanmakuController(
+        host,
+        startTimeout: const Duration(milliseconds: 20),
+        stopTimeout: const Duration(milliseconds: 20),
+      );
+      final room = LiveRoom(roomId: 'room-a', platform: 'test', danmakuData: const <String, dynamic>{});
+      controller.initDanmaku(engine);
 
-    await controller.connectRoom(room).timeout(const Duration(milliseconds: 200));
+      var completed = false;
+      unawaited(controller.connectRoom(room).then((_) => completed = true));
+      clock.flushMicrotasks();
+      clock.elapse(const Duration(milliseconds: 19));
+      expect(completed, isFalse);
+      clock.elapse(const Duration(milliseconds: 1));
+      clock.flushMicrotasks();
+      expect(completed, isTrue);
 
-    expect(engine.startCalls, 1);
-    expect(engine.stopCalls, 2, reason: 'pre-connect cleanup plus timeout cleanup');
-    expect(controller.needReconnect(room), isTrue);
-    expect(host.currentRoomId, isNull);
+      expect(engine.startCalls, 1);
+      expect(engine.stopCalls, 2, reason: 'pre-connect cleanup plus timeout cleanup');
+      expect(controller.needReconnect(room), isTrue);
+      expect(host.currentRoomId, isNull);
+      controller.onClose();
+      clock.flushMicrotasks();
+    });
   });
 
   test('a stalled transport stop does not block room teardown forever', () async {

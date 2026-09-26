@@ -30,35 +30,42 @@ class KickSite extends LiveSite implements LiveSiteRoomRefresher, LiveSiteRecord
   Future<List<LiveCategory>> getCategores(int page, int pageSize) async {
     final groups = <String, LiveCategory>{};
     final seen = <String>{};
-    // The category screen paginates a complete catalogue locally.
-    for (var next = 1; ; next++) {
-      final response = await request('/api/v1/subcategories', query: {'page': next, 'limit': 100});
-      final rows = response['data'] as List;
-      var added = 0;
-      for (final row in rows) {
-        final areaId = row['id'].toString();
-        if (!seen.add(areaId)) continue;
-        added++;
-        final parent = row['category'] as Map? ?? {};
-        final groupId = (parent['id'] ?? row['category_id'] ?? 'all').toString();
-        final group = groups.putIfAbsent(
-          groupId,
-          () => LiveCategory(id: groupId, name: (parent['name'] ?? 'Kick').toString(), children: []),
-        );
-        group.children.add(
-          LiveArea(
-            platform: id,
-            areaId: areaId,
-            areaName: row['name']?.toString(),
-            shortName: row['slug']?.toString(),
-            areaType: groupId,
-            typeName: group.name,
-            areaPic: row['banner']?['url']?.toString() ?? '',
-          ),
-        );
-      }
-      if (response['next_page_url'] == null) break;
-      if (added == 0) throw StateError('Kick category pagination did not advance');
+    // This endpoint ignores limit and returns 32 entries across hundreds of
+    // pages. The Kick page uses fixed remote paging, never a complete-catalog
+    // prefetch before first paint.
+    if (page < 1) return [];
+    final response = await request('/api/v1/subcategories', query: {'page': page, 'limit': 32});
+    if (response is! Map || response['data'] is! List) throw StateError('Kick categories missing');
+    final currentPage = int.tryParse(response['current_page']?.toString() ?? '');
+    if (currentPage != null && currentPage != page) throw StateError('Kick category page did not advance');
+    final perPage = int.tryParse(response['per_page']?.toString() ?? '');
+    if (perPage != null && perPage != 32) throw StateError('Kick category page size changed');
+    final rows = response['data'] as List;
+    for (final row in rows.whereType<Map>()) {
+      final areaId = row['id']?.toString() ?? '';
+      final slug = row['slug']?.toString().trim() ?? '';
+      if (areaId.isEmpty || slug.isEmpty) continue;
+      if (!seen.add(areaId)) continue;
+      final parent = row['category'] as Map? ?? {};
+      final groupId = (parent['id'] ?? row['category_id'] ?? 'all').toString();
+      final group = groups.putIfAbsent(
+        groupId,
+        () => LiveCategory(id: groupId, name: (parent['name'] ?? 'Kick').toString(), children: []),
+      );
+      group.children.add(
+        LiveArea(
+          platform: id,
+          areaId: areaId,
+          areaName: row['name']?.toString(),
+          shortName: slug,
+          areaType: groupId,
+          typeName: group.name,
+          areaPic: row['banner'] is Map ? row['banner']['url']?.toString() ?? '' : '',
+        ),
+      );
+    }
+    if (seen.length != rows.length) {
+      throw StateError('Kick category page contains incomplete or duplicate entries');
     }
     return groups.values.toList();
   }

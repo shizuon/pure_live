@@ -581,7 +581,21 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
 
   Future<BiliBiliDanmakuArgs> _discoverDanmaku(int realRoomId, {int maxAttempts = 4}) async {
     const baseUrl = "https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo";
+    final accountSnapshot = cookie;
     final headers = await getHeader();
+    if (cookie != accountSnapshot) throw StateError('Bilibili account changed during discovery');
+    final cookieSnapshot = headers['cookie'] ?? '';
+    var uid = resolveDanmakuUid(cookieSnapshot);
+    // Manual cookies can omit DedeUserID. Resolve the identity with the same
+    // header snapshot rather than using the previous account's cached uid.
+    if (uid == 0 && RegExp(r'(?:^|;)\s*SESSDATA=[^;]+').hasMatch(cookieSnapshot)) {
+      final nav = await HttpClient.instance.getJson('https://api.bilibili.com/x/web-interface/nav', header: headers);
+      if (nav is! Map || nav['code'] != 0 || nav['data']?['isLogin'] != true) {
+        throw StateError('Bilibili account session unavailable');
+      }
+      uid = int.tryParse(nav['data']?['mid']?.toString() ?? '') ?? 0;
+      if (uid <= 0) throw StateError('Bilibili account identity missing');
+    }
     Map<String, dynamic>? data;
     Object? lastError;
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
@@ -602,6 +616,7 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
       }
     }
     if (data == null) throw StateError('Bilibili danmaku discovery failed: $lastError');
+    if (cookie != accountSnapshot) throw StateError('Bilibili account changed during discovery');
 
     // The generic gateway has stable public DNS while some ISP/mobile DNS
     // resolvers intermittently omit the regional comet records returned by
@@ -620,20 +635,29 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
       // A remembered uid without its login cookie is not an authenticated
       // identity. Sending it in a guest auth packet makes the gateway close
       // the socket on some rooms; anonymous danmaku uses uid=0.
-      uid: cookie.trim().isEmpty ? 0 : userId,
+      uid: uid,
       token: data['token']?.toString() ?? '',
       serverUrls: serverUrls,
-      buvid: buvid3,
-      cookie: headers['cookie'] ?? cookie,
+      buvid: RegExp(r'(?:^|;)\s*buvid3=([^;]+)').firstMatch(cookieSnapshot)?.group(1) ?? '',
+      cookie: cookieSnapshot,
       headers: {
         'user-agent': headers['user-agent'] ?? kDefaultUserAgent,
         'origin': 'https://live.bilibili.com',
         'referer': 'https://live.bilibili.com/$realRoomId',
         if ((headers['cookie'] ?? '').isNotEmpty) 'cookie': headers['cookie'],
       },
-      refresh: () => _discoverDanmaku(realRoomId),
+      refresh: () => _discoverDanmaku(realRoomId, maxAttempts: 1),
     );
   }
+
+  @visibleForTesting
+  static int resolveDanmakuUid(String cookie) {
+    if (!RegExp(r'(?:^|;)\s*SESSDATA=[^;]+').hasMatch(cookie)) return 0;
+    final value = RegExp(r'(?:^|;)\s*DedeUserID=(\d+)(?:;|$)').firstMatch(cookie)?.group(1);
+    return int.tryParse(value ?? '') ?? 0;
+  }
+
+  Future<BiliBiliDanmakuArgs> getDanmakuArgs(int roomId) => _discoverDanmaku(roomId, maxAttempts: 1);
 
   @override
   Future<LiveRoom> getRoomDetail({required String platform, required String roomId}) async {
@@ -651,7 +675,7 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
         final headers = await getHeader();
         danmakuArgs = BiliBiliDanmakuArgs(
           roomId: int.tryParse(realRoomId) ?? 0,
-          uid: cookie.trim().isEmpty ? 0 : userId,
+          uid: resolveDanmakuUid(headers['cookie'] ?? ''),
           token: '',
           serverUrls: const ['wss://broadcastlv.chat.bilibili.com/sub'],
           buvid: buvid3,
@@ -662,7 +686,7 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
             'referer': 'https://live.bilibili.com/$realRoomId',
             if ((headers['cookie'] ?? '').isNotEmpty) 'cookie': headers['cookie'],
           },
-          refresh: () => _discoverDanmaku(int.tryParse(realRoomId) ?? 0),
+          refresh: () => _discoverDanmaku(int.tryParse(realRoomId) ?? 0, maxAttempts: 1),
         );
       }
       return _buildRoom(roomInfo, roomId: roomId, danmakuData: danmakuArgs);

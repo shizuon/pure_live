@@ -22,6 +22,9 @@ import 'package:pure_live/player/interface/media_kit_player_accessor.dart';
 import 'package:pure_live/player/widgets/viewport_sized_video.dart';
 import 'package:pure_live/player/models/macos_decode_mode.dart';
 import 'package:pure_live/player/utils/macos_decoder_status.dart';
+import 'package:pure_live/player/utils/playback_diagnostics.dart';
+import 'package:pure_live/player/interface/commentary_buffer_control.dart';
+import 'package:pure_live/player/utils/native_sync_buffer.dart';
 
 @visibleForTesting
 ({int width, int height})? resolveMediaKitDisplaySize(VideoParams params) {
@@ -29,7 +32,7 @@ import 'package:pure_live/player/utils/macos_decoder_status.dart';
   return size == null ? null : (width: size.width, height: size.height);
 }
 
-class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapablePlayer {
+class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapablePlayer, CommentaryBufferControl {
   MediaKitAdapter() {
     _audioModeTransitions = LatestAsyncValueQueue<bool>(_applyAudioOnly);
   }
@@ -49,11 +52,9 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
 
     await native.setProperty('demuxer-lavf-probesize', '2097152');
 
-    // mpv's generic defaults keep a large seek-oriented forward/backward
-    // cache. Live rooms are not meaningfully seekable, so retaining that
-    // much compressed data only makes long Windows/Android sessions appear
-    // to grow indefinitely. Keep this shared with the tested policy rather
-    // than scattering raw byte strings through the adapter.
+    // Shared normal-playback packet-cache limits. With disk caching enabled
+    // these do not cap payload file size; see LiveBufferPolicy. Dual-stream
+    // long-delay calibration temporarily overrides and restores these options.
     await native.setProperty('demuxer-max-bytes', LiveBufferPolicy.forwardBytes.toString());
 
     await native.setProperty('demuxer-max-back-bytes', LiveBufferPolicy.backBytes.toString());
@@ -109,22 +110,50 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
   bool _isAudioOnly = false;
 
   MacosHardwareDecodeGuard? _hardwareDecodeGuard;
+  late final NativeSyncBuffer _syncBuffer = NativeSyncBuffer(
+    available: () => _initialized && !_disposed,
+    read: (key) async => await (_player.platform as dynamic).getProperty(key) as String,
+    write: (key, value) async => await (_player.platform as dynamic).setProperty(key, value),
+  );
+
+  @override
+  Future<void> reserveSyncBuffer(Duration retainedDelay) => _syncBuffer.reserve(retainedDelay);
+
+  @override
+  Future<void> restoreSyncBuffer() => _syncBuffer.restore();
+
+  @override
+  Future<Duration?> readBufferedAhead() async {
+    if (!_initialized || _disposed) return null;
+    try {
+      final text = await ((_player.platform as dynamic).getProperty('demuxer-cache-duration') as Future<String>)
+          .timeout(const Duration(seconds: 1));
+      final seconds = double.tryParse(text);
+      if (seconds == null || !seconds.isFinite || seconds < 0) return null;
+      return Duration(microseconds: (seconds * 1000000).round());
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<MacosDecoderStatus> readMacosDecoderStatus() async {
     if (!_initialized || _disposed || _currentUrl == null) {
       return const MacosDecoderStatus(MacosDecoderState.inactive);
     }
-    return MacosDecoderStatus.read(
-      (property) async => await (_player.platform as dynamic).getProperty(property) as String,
+    final url = _currentUrl;
+    Future<String> read(String property) async => await (_player.platform as dynamic).getProperty(property) as String;
+    final diagnosticFuture = PlaybackDiagnostics.read(read);
+    final status = await MacosDecoderStatus.read(
+      (property) => read(property).timeout(const Duration(seconds: 2)),
       videoEnabled: !_isAudioOnly,
     );
+    final diagnostics = await diagnosticFuture;
+    if (_disposed || url != _currentUrl) return const MacosDecoderStatus(MacosDecoderState.unavailable);
+    return MacosDecoderStatus(status.state, decoder: status.decoder, codec: status.codec, diagnostics: diagnostics);
   }
 
-  void _rejectSoftwareDecode() => _emitError(
-    StateError(i18n('macos_decode_rejected')),
-    StackTrace.current,
-    PlayerErrorType.native,
-  );
+  void _rejectSoftwareDecode() =>
+      _emitError(StateError(i18n('macos_decode_rejected')), StackTrace.current, PlayerErrorType.native);
 
   late final LatestAsyncValueQueue<bool> _audioModeTransitions;
 
@@ -727,6 +756,7 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
     _disposed = true;
 
     _initialized = false;
+    await _syncBuffer.close();
 
     _listenerBound = false;
 

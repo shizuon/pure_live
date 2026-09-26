@@ -222,14 +222,16 @@ class PlayerKernelSettingsPage extends GetView<SettingsService> {
     final commentary = service.initialized
         ? service.playerPool.cachedPlayer(PlayerEngine.mediaKit, PlayerSlot.commentaryAudio)
         : null;
-    final result = <String, MacosDecoderStatus>{};
-    for (final entry in {'A': main, 'B': commentary}.entries) {
-      final adapter = entry.value;
-      result[entry.key] = adapter is MediaKitAdapter
-          ? await adapter.readMacosDecoderStatus()
-          : const MacosDecoderStatus(MacosDecoderState.inactive);
-    }
-    return result;
+    final entries = await Future.wait(
+      {'A': main, 'B': commentary}.entries.map((entry) async {
+        final adapter = entry.value;
+        final status = adapter is MediaKitAdapter
+            ? await adapter.readMacosDecoderStatus()
+            : const MacosDecoderStatus(MacosDecoderState.inactive);
+        return MapEntry(entry.key, status);
+      }),
+    );
+    return Map.fromEntries(entries);
   }
 
   // 播放器选择弹窗

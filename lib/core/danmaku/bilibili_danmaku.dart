@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:brotli/brotli.dart';
+import 'package:web_socket_channel/io.dart';
 
 import '../common/binary_writer.dart';
 
@@ -46,6 +48,18 @@ class BiliBiliDanmakuArgs {
 }
 
 class BiliBiliDanmaku implements LiveDanmaku {
+  BiliBiliDanmaku({
+    this.connector,
+    this.packetSender,
+    this.retryDelay = const Duration(seconds: 15),
+    this.discoveryTimeout = const Duration(seconds: 12),
+    this.authTimeout = const Duration(seconds: 8),
+  });
+  final WebSocketConnector? connector;
+  final void Function(List<int>)? packetSender;
+  final Duration retryDelay;
+  final Duration discoveryTimeout;
+  final Duration authTimeout;
   @override
   int heartbeatTime = 30 * 1000;
   bool _connected = false;
@@ -74,125 +88,173 @@ class BiliBiliDanmaku implements LiveDanmaku {
 
   WebScoketUtils? webScoketUtils;
   late BiliBiliDanmakuArgs danmakuArgs;
-  bool _refreshingCredentials = false;
   bool _stopped = false;
-  int _credentialRefreshCount = 0;
   Timer? _authTimer;
+  Timer? _retryTimer;
+  int _generation = 0;
+  int _attempt = 0;
+  int _endpointIndex = 0;
+  Future<BiliBiliDanmakuArgs?>? _pendingRefresh;
+
+  bool _owns(int generation, int attempt) => !_stopped && generation == _generation && attempt == _attempt;
 
   @override
   Future start(dynamic args) async {
-    await webScoketUtils?.close();
+    final generation = ++_generation;
+    _attempt++;
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _authTimer?.cancel();
+    final previous = webScoketUtils;
     webScoketUtils = null;
     danmakuArgs = args as BiliBiliDanmakuArgs;
     _stopped = false;
-    _credentialRefreshCount = 0;
+    _endpointIndex = 0;
+    _pendingRefresh = null;
     markDisconnected();
-    if (danmakuArgs.token.isEmpty) {
-      for (var attempt = 0; attempt < 3 && !_stopped; attempt++) {
-        try {
-          final refreshed = await danmakuArgs.refresh?.call();
-          if (refreshed != null && refreshed.token.isNotEmpty) {
-            danmakuArgs = refreshed;
-            break;
-          }
-        } catch (error) {
-          CoreLog.error(error);
-        }
-        if (attempt < 2) await Future<void>.delayed(Duration(milliseconds: 500 * (attempt + 1)));
-      }
-      if (_stopped || danmakuArgs.token.isEmpty) {
-        onClose?.call("弹幕连接信息仍在更新，请稍后刷新房间");
-        return;
-      }
-    }
-    await _connect(danmakuArgs);
+    await previous?.close();
+    if (_stopped || generation != _generation) return;
+    // Own discovery beyond this method. The page's 20s startup timeout must
+    // not terminate a recoverable token/API failure and cancel all retries.
+    unawaited(_connect(generation, refresh: danmakuArgs.token.isEmpty));
   }
 
-  Future<void> _connect(BiliBiliDanmakuArgs args) async {
-    if (_stopped) return;
-    final endpoints = args.serverUrls.isEmpty ? const ['wss://broadcastlv.chat.bilibili.com/sub'] : args.serverUrls;
-    webScoketUtils = WebScoketUtils(
-      url: endpoints.first,
-      serverUrls: endpoints,
-      headers: args.headers.isNotEmpty ? args.headers : (args.cookie.isEmpty ? null : {"cookie": args.cookie}),
-      heartBeatTime: heartbeatTime,
-      onMessage: (e) {
-        decodeMessage(e);
-      },
-      onReady: () {
-        joinRoom(danmakuArgs);
-        _authTimer?.cancel();
-        _authTimer = Timer(const Duration(seconds: 8), () {
-          if (!_stopped && !isConnected) webScoketUtils?.reconnect();
-        });
-      },
-      onHeartBeat: () {
-        heartbeat();
-      },
-      onReconnect: () {
-        _authTimer?.cancel();
-        markDisconnected();
-        onClose?.call("与服务器断开连接，正在尝试重连（15秒后）");
-      },
-      onClose: (e) {
-        _authTimer?.cancel();
-        markDisconnected();
-        onClose?.call("服务器连接失败$e");
-      },
-    );
-    await webScoketUtils?.connect();
-  }
-
-  Future<void> _refreshCredentialsAndReconnect() async {
-    if (_stopped || _refreshingCredentials || _credentialRefreshCount >= 3) return;
-    _refreshingCredentials = true;
-    _credentialRefreshCount++;
+  Future<void> _connect(int generation, {required bool refresh}) async {
+    final attempt = ++_attempt;
+    if (!_owns(generation, attempt)) return;
     try {
-      final refreshed = await danmakuArgs.refresh?.call();
-      if (_stopped || refreshed == null || refreshed.token.isEmpty) return;
-      danmakuArgs = refreshed;
-      await webScoketUtils?.close();
-      if (_stopped) return;
-      await _connect(refreshed);
-    } catch (error) {
-      CoreLog.error(error);
-    } finally {
-      _refreshingCredentials = false;
+      var args = danmakuArgs;
+      if (refresh && args.refresh != null) {
+        // A timeout fences a result but does not cancel its HTTP requests.
+        // Reuse the in-flight discovery on subsequent timers instead of
+        // accumulating parallel discovery requests while an endpoint hangs.
+        var pending = _pendingRefresh;
+        if (pending == null) {
+          final operation = Future<BiliBiliDanmakuArgs?>.sync(args.refresh!);
+          _pendingRefresh = pending = operation;
+          unawaited(
+            operation.then<void>(
+              (_) {
+                if (identical(_pendingRefresh, operation)) _pendingRefresh = null;
+              },
+              onError: (Object _, StackTrace __) {
+                if (identical(_pendingRefresh, operation)) _pendingRefresh = null;
+              },
+            ),
+          );
+        }
+        final updated = await pending.timeout(discoveryTimeout);
+        if (!_owns(generation, attempt)) return;
+        if (updated == null || updated.roomId != args.roomId || updated.token.isEmpty) {
+          throw StateError('Invalid refreshed danmaku credentials');
+        }
+        args = updated;
+        danmakuArgs = updated;
+      }
+      if (args.token.isEmpty) throw StateError('Missing danmaku token');
+      final endpoints = args.serverUrls.isEmpty ? const ['wss://broadcastlv.chat.bilibili.com/sub'] : args.serverUrls;
+      final socket = WebScoketUtils(
+        url: endpoints[_endpointIndex % endpoints.length],
+        headers: args.headers.isNotEmpty ? args.headers : (args.cookie.isEmpty ? null : {"cookie": args.cookie}),
+        heartBeatTime: heartbeatTime,
+        connector:
+            connector ??
+            (url, {connectTimeout, protocols, headers}) =>
+                IOWebSocketChannel.connect(url, connectTimeout: connectTimeout, protocols: protocols, headers: headers),
+        onMessage: (e) {
+          if (_owns(generation, attempt) && e is List<int>) decodeMessage(e);
+        },
+        onReady: () {
+          if (!_owns(generation, attempt)) return;
+          _authTimer?.cancel();
+          _authTimer = Timer(authTimeout, () {
+            if (_owns(generation, attempt) && !isConnected) _scheduleRetry(generation, attempt);
+          });
+          joinRoom(args);
+        },
+        onHeartBeat: () {
+          if (_owns(generation, attempt) && isConnected) heartbeat();
+        },
+        onClose: (e) {
+          if (_owns(generation, attempt)) _scheduleRetry(generation, attempt);
+        },
+      );
+      // No second retry loop inside the transport. Failure delegates to this
+      // owner, which refreshes token + UID + headers together on every retry.
+      socket.maxReconnectTime = 0;
+      webScoketUtils = socket;
+      await socket.connect().timeout(const Duration(seconds: 12));
+    } catch (_) {
+      if (_owns(generation, attempt)) _scheduleRetry(generation, attempt);
+    }
+  }
+
+  void _scheduleRetry(int generation, int attempt) {
+    if (!_owns(generation, attempt)) return;
+    _attempt++; // Reject buffered packets and late handshake/auth callbacks.
+    _endpointIndex++;
+    _authTimer?.cancel();
+    _authTimer = null;
+    markDisconnected();
+    final old = webScoketUtils;
+    webScoketUtils = null;
+    unawaited(old?.close() ?? Future<void>.value());
+    _retryTimer?.cancel();
+    _retryTimer = Timer(retryDelay, () {
+      _retryTimer = null;
+      if (!_stopped && generation == _generation) unawaited(_connect(generation, refresh: true));
+    });
+    // Existing page controller treats this as transient and retains ownership.
+    onClose?.call("与服务器断开连接，正在尝试重连（15秒后）");
+  }
+
+  Map<String, dynamic> buildJoinPayload(BiliBiliDanmakuArgs args) => {
+    'uid': args.uid,
+    'roomid': args.roomId,
+    'protover': 3,
+    'buvid': args.buvid,
+    'support_ack': true,
+    'queue_uuid': List.generate(8, (_) => Random.secure().nextInt(16).toRadixString(16)).join(),
+    'scene': 'room',
+    'platform': 'web',
+    'type': 2,
+    'key': args.token,
+  };
+
+  void _sendPacket(List<int> data) {
+    if (packetSender != null) {
+      packetSender!(data);
+    } else {
+      webScoketUtils?.sendMessage(data);
     }
   }
 
   void joinRoom(BiliBiliDanmakuArgs args) {
-    var joinData = encodeData(
-      json.encode({
-        "uid": args.uid,
-        "roomid": args.roomId,
-        "protover": 3,
-        "buvid": args.buvid,
-        "platform": "web",
-        "type": 2,
-        "key": args.token,
-      }),
-      7,
-    );
-    webScoketUtils?.sendMessage(joinData);
+    _sendPacket(encodeData(json.encode(buildJoinPayload(args)), 7));
   }
 
   @override
   void heartbeat() {
-    webScoketUtils?.sendMessage(encodeData("", 2));
+    _sendPacket(encodeData("", 2));
   }
 
   @override
   Future stop() async {
     _stopped = true;
+    _generation++;
+    _pendingRefresh = null;
+    _attempt++;
+    _retryTimer?.cancel();
+    _retryTimer = null;
     _authTimer?.cancel();
     _authTimer = null;
     markDisconnected();
     onMessage = null;
     onClose = null;
     onReady = null;
-    await webScoketUtils?.close();
+    final previous = webScoketUtils;
     webScoketUtils = null;
+    await previous?.close();
   }
 
   List<int> encodeData(String msg, int action) {
@@ -224,6 +286,7 @@ class BiliBiliDanmaku implements LiveDanmaku {
   }
 
   void decodeMessage(List<int> data) {
+    if (_stopped) return;
     try {
       _decodePacketStream(data, depth: 0);
     } catch (e) {
@@ -255,7 +318,9 @@ class BiliBiliDanmaku implements LiveDanmaku {
       }
 
       final body = data.sublist(offset + headerLength, offset + packetLength);
+      final previousAttempt = _attempt;
       _decodePacket(protocolVersion, operation, body, depth: depth);
+      if (_stopped || previousAttempt != _attempt) return;
       offset += packetLength;
     }
 
@@ -294,7 +359,7 @@ class BiliBiliDanmaku implements LiveDanmaku {
     if (operation == 8) {
       // The transport is usable only after Bilibili acknowledges auth.
       final text = utf8.decode(body, allowMalformed: true).trim();
-      final dynamic decoded = text.isEmpty ? const <String, dynamic>{'code': 0} : json.decode(text);
+      final dynamic decoded = text.isEmpty ? const <String, dynamic>{'code': -1} : json.decode(text);
       final auth = decoded is Map ? decoded : const <String, dynamic>{};
       final code = int.tryParse(auth['code']?.toString() ?? '') ?? -1;
       if (code == 0 && !isConnected) {
@@ -305,7 +370,7 @@ class BiliBiliDanmaku implements LiveDanmaku {
       } else if (code != 0) {
         _authTimer?.cancel();
         markDisconnected();
-        unawaited(_refreshCredentialsAndReconnect());
+        _scheduleRetry(_generation, _attempt);
       }
     }
   }
@@ -313,6 +378,14 @@ class BiliBiliDanmaku implements LiveDanmaku {
   void parseMessage(String jsonMessage) {
     try {
       var obj = json.decode(jsonMessage);
+      if (obj is Map && obj['p_is_ack'] == true) {
+        final id = obj['msg_id']?.toString().trim() ?? '';
+        final cmd = obj['cmd']?.toString().trim() ?? '';
+        final type = int.tryParse(obj['p_msg_type']?.toString() ?? '');
+        if (id.isNotEmpty && cmd.isNotEmpty && type != null) {
+          _sendPacket(encodeData(json.encode({'msg_id': id, 'cmd': cmd, 'p_msg_type': type}), 24));
+        }
+      }
       var cmd = obj["cmd"].toString();
       if (cmd.contains("DANMU_MSG")) {
         if (obj["info"] != null && obj["info"].length != 0) {

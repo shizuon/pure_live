@@ -12,6 +12,8 @@ import 'package:pure_live/player/core/live_audio_control_delegate.dart';
 import 'package:pure_live/player/core/player_manager.dart';
 import 'package:pure_live/player/core/player_pool.dart';
 import 'package:pure_live/player/interface/sync_capable_player.dart';
+import 'package:pure_live/player/interface/commentary_buffer_control.dart';
+import 'package:pure_live/modules/live_play/service/commentary_buffer_policy.dart';
 import 'package:pure_live/player/interface/unified_player_interface.dart';
 import 'package:pure_live/player/models/player_engine.dart';
 import 'package:pure_live/player/models/player_slot.dart';
@@ -59,6 +61,13 @@ class CommentarySyncController
   double _baselineGapMs = 0;
   double _primaryRestoreVolume = 1;
   double _companionRate = 1;
+  int _primaryHeldMs = 0;
+  int _companionHeldMs = 0;
+  int _driftDirection = 0;
+  bool _checkingDrift = false;
+  bool _bufferProtectionActive = false;
+  String? _bufferNotice;
+  final Set<CommentaryBufferControl> _bufferPlayers = {};
   bool _manualStop = false;
   bool _disposed = false;
   Future<void>? _exitFuture;
@@ -382,6 +391,7 @@ class CommentarySyncController
     final audioMs = _companionSync?.currentPosition.inMicroseconds ?? 0;
     _baselineGapMs = (audioMs - videoMs) / 1000;
     _consecutiveDriftSamples = 0;
+    _driftDirection = 0;
   }
 
   Future<void> adjustOffset(int deltaMs) => setOffset(_requestedOffsetMs + deltaMs);
@@ -402,7 +412,9 @@ class CommentarySyncController
     _cancelBufferRecovery();
     final running = _offsetWork;
     if (running != null) return running;
-    final work = _drainOffsetRequests();
+    // Register ownership before synchronous rejection (e.g. retained-delay
+    // limit) can finish the drain and clear it.
+    final work = Future<void>.microtask(_drainOffsetRequests);
     _offsetWork = work;
     return work;
   }
@@ -414,9 +426,34 @@ class CommentarySyncController
         final target = _requestedOffsetMs;
         final delta = target - _appliedOffsetMs;
         if (delta == 0) break;
+        final hold = CommentaryBufferPolicy.afterAdjustment(
+          primaryMs: _primaryHeldMs,
+          commentaryMs: _companionHeldMs,
+          deltaMs: delta,
+        );
+        if (!CommentaryBufferPolicy.fits(primaryMs: hold.primary, commentaryMs: hold.commentary)) {
+          _requestedOffsetMs = _appliedOffsetMs;
+          _bufferNotice = '累计校准等待已接近安全上限；请主动重新同步，再重新校准，避免直播缓存窗口不足';
+          break;
+        }
+        if (_bufferProtectionActive ||
+            hold.primary >= CommentaryBufferPolicy.activationMs ||
+            hold.commentary >= CommentaryBufferPolicy.activationMs) {
+          final prepared = await _prepareDelayBuffers(hold.primary, hold.commentary, generation);
+          if (generation != _generation || _manualStop) break;
+          if (!prepared) {
+            _requestedOffsetMs = _appliedOffsetMs;
+            _bufferNotice = '未能准备大延迟缓存，已保留当前偏移；可重试或降低直播画质';
+            break;
+          }
+        }
         await _setCompanionRate(1);
         final player = delta > 0 ? _companion : primaryManager.currentPlayer;
         if (player == null || _transportPausedByUser) break;
+        // Account conservatively for a cancelled hold too: some delay may
+        // already have accumulated, and must not be treated as free capacity.
+        _primaryHeldMs = hold.primary;
+        _companionHeldMs = hold.commentary;
         final applied = await _pauseFor(player, Duration(milliseconds: delta.abs()), generation: generation);
         if (!applied) break;
         _appliedOffsetMs = target;
@@ -428,14 +465,36 @@ class CommentarySyncController
         state.value = state.value.copyWith(
           status: CommentarySyncStatus.active,
           offsetMs: _requestedOffsetMs,
-          message: pending ? '偏移将在继续播放后应用' : null,
-          clearMessage: !pending,
+          message: pending ? '偏移将在继续播放后应用' : _bufferNotice,
+          clearMessage: !pending && _bufferNotice == null,
         );
         if (pending && !_transportPausedByUser && primaryManager.isPlayingNow && (_companion?.isPlayingNow ?? false)) {
           unawaited(setOffset(_requestedOffsetMs));
         }
         _checkCompanionBuffering();
       }
+    }
+  }
+
+  Future<bool> _prepareDelayBuffers(int primaryMs, int companionMs, int generation) async {
+    try {
+      final primary = primaryManager.currentPlayer;
+      final companion = _companion;
+      if (primary is! CommentaryBufferControl || companion is! CommentaryBufferControl) return false;
+      final primaryBuffer = primary as CommentaryBufferControl;
+      final companionBuffer = companion as CommentaryBufferControl;
+      // Track before awaiting so exit can enqueue restore after an in-flight
+      // native configuration. Never seek/reopen either stream for this change.
+      _bufferPlayers.addAll([primaryBuffer, companionBuffer]);
+      await primaryBuffer.reserveSyncBuffer(Duration(milliseconds: primaryMs));
+      if (generation != _generation || _manualStop) return false;
+      await companionBuffer.reserveSyncBuffer(Duration(milliseconds: companionMs));
+      if (generation != _generation || _manualStop) return false;
+      _bufferProtectionActive = true;
+      _bufferNotice = '大偏移缓存保护已启用；低缓存时暂停加速追赶。持续带宽不足仍需降低画质或换线路';
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -569,6 +628,9 @@ class CommentarySyncController
       message: '正在重新同步',
     );
     await _restorePrimaryAudio();
+    await _restoreDelayBuffers();
+    _primaryHeldMs = 0;
+    _companionHeldMs = 0;
     await _disposeCompanion();
 
     try {
@@ -600,6 +662,7 @@ class CommentarySyncController
     final generation = _generation;
     _primaryReloading = false;
     _primarySync = primaryManager.currentPlayer as SyncCapablePlayer?;
+    _primaryHeldMs = 0;
     if (_primarySync == null) return;
     try {
       await _waitUntilStable(generation: generation, stableFor: const Duration(milliseconds: 500));
@@ -658,6 +721,17 @@ class CommentarySyncController
   }
 
   Future<void> _correctDrift() async {
+    if (_checkingDrift) return;
+    _checkingDrift = true;
+    try {
+      await _correctDriftOnce();
+    } finally {
+      _checkingDrift = false;
+    }
+  }
+
+  Future<void> _correctDriftOnce() async {
+    final generation = _generation;
     final video = _primarySync;
     final audio = _companionSync;
     if (!isActive ||
@@ -671,8 +745,29 @@ class CommentarySyncController
     }
     if (video.isBufferingNow || audio.isBufferingNow || !_companion!.isPlayingNow || !primaryManager.isPlayingNow) {
       _consecutiveDriftSamples = 0;
+      _driftDirection = 0;
       await _setCompanionRate(1);
       return;
+    }
+    final bufferedPlayer = _companion;
+    Duration? bufferedAhead;
+    if (bufferedPlayer is CommentaryBufferControl) {
+      bufferedAhead = await (bufferedPlayer as CommentaryBufferControl).readBufferedAhead();
+      if (generation != _generation ||
+          _manualStop ||
+          !identical(bufferedPlayer, _companion) ||
+          _offsetWork != null ||
+          _transportPausedByUser ||
+          video.isBufferingNow ||
+          audio.isBufferingNow) {
+        return;
+      }
+      if (_companionRate > 1 && CommentaryBufferPolicy.guardRate(_companionRate, bufferedAhead) == 1) {
+        await _setCompanionRate(1);
+        _consecutiveDriftSamples = 0;
+        _driftDirection = 0;
+        return;
+      }
     }
 
     final actualGapMs = (audio.currentPosition - video.currentPosition).inMicroseconds / 1000;
@@ -680,21 +775,29 @@ class CommentarySyncController
     final errorMs = actualGapMs - desiredGapMs;
     if (errorMs.abs() <= 50) {
       _consecutiveDriftSamples = 0;
+      _driftDirection = 0;
       await _setCompanionRate(1);
       return;
     }
     if (errorMs.abs() <= 150) {
       _consecutiveDriftSamples = 0;
+      _driftDirection = 0;
       return;
     }
 
+    final direction = errorMs.sign.toInt();
+    if (_driftDirection != direction) _consecutiveDriftSamples = 0;
+    _driftDirection = direction;
     _consecutiveDriftSamples++;
     if (_consecutiveDriftSamples < 3) return;
-    final correctionRate = CommentarySyncMath.correctionRate(
+    var correctionRate = CommentarySyncMath.correctionRate(
       errorMs: errorMs,
       consecutiveSamples: _consecutiveDriftSamples,
     );
     _consecutiveDriftSamples = 0;
+    if (correctionRate > 1 && bufferedPlayer is CommentaryBufferControl) {
+      correctionRate = CommentaryBufferPolicy.guardRate(correctionRate, bufferedAhead);
+    }
     await _setCompanionRate(correctionRate);
   }
 
@@ -932,7 +1035,12 @@ class CommentarySyncController
     }
     state.value = state.value.copyWith(overlayEnabled: false, overlayEditing: false, previewVisible: false);
     if (restorePrimary && state.value.isEngaged) await _restorePrimaryAudio();
+    await _restoreDelayBuffers();
     await _disposeCompanion();
+    _primaryHeldMs = 0;
+    _companionHeldMs = 0;
+    _bufferProtectionActive = false;
+    _bufferNotice = null;
     _source = null;
     _preferredQualityId = null;
     _primarySync = null;
@@ -954,6 +1062,18 @@ class CommentarySyncController
     _bufferReconnectTimer = null;
   }
 
+  Future<void> _restoreDelayBuffers() async {
+    final players = _bufferPlayers.toList();
+    _bufferPlayers.clear();
+    for (final player in players) {
+      try {
+        await player.restoreSyncBuffer();
+      } catch (_) {}
+    }
+    _bufferProtectionActive = false;
+    _bufferNotice = null;
+  }
+
   void _cancelOffsetDelay() {
     final cancellation = _offsetDelayCancellation;
     if (cancellation != null && !cancellation.isCompleted) {
@@ -973,10 +1093,17 @@ class CommentarySyncController
     try {
       await _companionSync?.setPlaybackRate(1);
     } catch (_) {}
+    final bufferPlayer = _companion;
+    if (bufferPlayer is CommentaryBufferControl && _bufferPlayers.remove(bufferPlayer as CommentaryBufferControl)) {
+      try {
+        await (bufferPlayer as CommentaryBufferControl).restoreSyncBuffer();
+      } catch (_) {}
+    }
     await playerPool.removeFromCache(PlayerEngine.mediaKit, slot: PlayerSlot.commentaryAudio);
     _companion = null;
     _companionSync = null;
     _companionRate = 1;
+    _companionHeldMs = 0;
   }
 
   Future<void> dispose() => _disposeFuture ??= _dispose();

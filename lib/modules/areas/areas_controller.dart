@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/modules/areas/areas_list_controller.dart';
+import 'package:pure_live/core/site/kick/kick_site.dart';
+
+import 'kick_areas_page.dart';
 
 class AreasController extends GetxController with GetTickerProviderStateMixin {
   late TabController tabController;
@@ -53,13 +56,20 @@ class AreasController extends GetxController with GetTickerProviderStateMixin {
 
   void _registerListController(dynamic site) {
     final tag = site.id;
+    if (tag == Sites.kickSite) {
+      if (!Get.isRegistered<KickAreasController>(tag: tag)) {
+        Get.lazyPut(() => KickAreasController(site.liveSite as KickSite), tag: tag, fenix: true);
+      }
+      return;
+    }
     if (!Get.isRegistered<AreasListController>(tag: tag)) {
       Get.lazyPut(() => AreasListController(site), tag: tag, fenix: true);
     }
   }
 
-  AreasListController _ensureListController(dynamic site) {
+  BasePageScrollAndStateBone<LiveArea> _ensureListController(dynamic site) {
     _registerListController(site);
+    if (site.id == Sites.kickSite) return Get.find<KickAreasController>(tag: site.id);
     return Get.find<AreasListController>(tag: site.id);
   }
 
@@ -149,7 +159,7 @@ class AreasController extends GetxController with GetTickerProviderStateMixin {
     _adjacentWarmTimer = Timer(const Duration(milliseconds: 800), () => _warmNextPlatform(i, listController));
   }
 
-  void _warmNextPlatform(int currentIndex, AreasListController current) {
+  void _warmNextPlatform(int currentIndex, BasePageScrollAndStateBone<LiveArea> current) {
     if (currentIndex != index || sites.length < 2) return;
     if (current.scrollController.hasClients && current.scrollController.position.isScrollingNotifier.value) {
       _adjacentWarmTimer?.cancel();

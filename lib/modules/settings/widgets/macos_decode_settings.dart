@@ -96,9 +96,16 @@ class _MacosDecodeSettingsState extends State<MacosDecodeSettings> {
                   i18n('macos_decode_status_${entry.value.state.name}'),
                   if (entry.value.decoder.isNotEmpty) entry.value.decoder,
                   if (entry.value.codec.isNotEmpty) entry.value.codec,
+                  if (entry.value.diagnostics case final d?)
+                    '\n${i18n('playback_diagnostic_snapshot', args: {'position': d.number('time-pos'), 'cache': d.number('demuxer-cache-duration'), 'buffering': d.values['paused-for-cache'] ?? '—', 'paused': d.values['pause'] ?? '—', 'eof': d.values['eof-reached'] ?? '—', 'speed': d.number('speed'), 'decode': d.number('decoder-frame-drop-count', digits: 0), 'output': d.number('frame-drop-count', digits: 0)})}',
                 ].join(' · '),
               ),
             ),
+        if (_status != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Text(i18n('playback_diagnostic_snapshot_hint')),
+          ),
       ]),
     ],
   );

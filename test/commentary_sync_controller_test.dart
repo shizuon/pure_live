@@ -16,6 +16,8 @@ import 'package:pure_live/player/core/line_fallback_manager.dart';
 import 'package:pure_live/player/core/player_manager.dart';
 import 'package:pure_live/player/core/player_pool.dart';
 import 'package:pure_live/player/interface/sync_capable_player.dart';
+import 'package:pure_live/player/interface/commentary_buffer_control.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:pure_live/player/interface/unified_player_interface.dart';
 import 'package:pure_live/player/models/player_engine.dart';
 import 'package:pure_live/player/models/player_exception.dart';
@@ -23,6 +25,65 @@ import 'package:pure_live/player/models/player_state.dart';
 import 'package:rxdart/rxdart.dart' show BehaviorSubject;
 
 void main() {
+  test('large delay configures both caches before pausing and exit restores the main cache', () async {
+    final primary = _SyncPlayer(position: const Duration(seconds: 30));
+    final companion = _SyncPlayer(position: const Duration(seconds: 27));
+    final pool = PlayerPool(factory: (_) async => companion);
+    final controller = CommentarySyncController(
+      primaryManager: _PlayerManager(primary: primary, pool: pool),
+      playerPool: pool,
+      platformSupportProbe: () => true,
+      resolver: const _Resolver(),
+    );
+    addTearDown(controller.dispose);
+    await controller.activate(
+      videoRoom: LiveRoom(roomId: 'a', platform: 'test'),
+      audioRoom: LiveRoom(roomId: 'b', platform: 'test'),
+      primaryVolume: .6,
+    );
+    fakeAsync((clock) {
+      unawaited(controller.setOffset(-15000));
+      clock.flushMicrotasks();
+      expect(primary.bufferReservations.last, const Duration(seconds: 15));
+      expect(companion.bufferReservations.last, Duration.zero);
+      expect(primary.isPlayingNow, isFalse);
+      expect(companion.isPlayingNow, isTrue);
+      clock.elapse(const Duration(seconds: 15));
+      expect(controller.state.value.offsetMs, -15000);
+      expect(primary.isPlayingNow, isTrue);
+      // A reversal pauses B but keeps A's previous 15 seconds accounted for.
+      unawaited(controller.setOffset(0));
+      clock.flushMicrotasks();
+      expect(primary.bufferReservations.last, const Duration(seconds: 15));
+      expect(companion.bufferReservations.last, const Duration(seconds: 15));
+      clock.elapse(const Duration(seconds: 15));
+    });
+    await controller.exit();
+    expect(primary.bufferRestores, 1);
+    expect(companion.bufferRestores, 1);
+  });
+  test('large-delay cache failure does not pause either stream or pretend offset was applied', () async {
+    final primary = _SyncPlayer(position: const Duration(seconds: 30))..failBufferReservation = true;
+    final companion = _SyncPlayer(position: const Duration(seconds: 27));
+    final pool = PlayerPool(factory: (_) async => companion);
+    final controller = CommentarySyncController(
+      primaryManager: _PlayerManager(primary: primary, pool: pool),
+      playerPool: pool,
+      platformSupportProbe: () => true,
+      resolver: const _Resolver(),
+    );
+    addTearDown(controller.dispose);
+    await controller.activate(
+      videoRoom: LiveRoom(roomId: 'a', platform: 'test'),
+      audioRoom: LiveRoom(roomId: 'b', platform: 'test'),
+      primaryVolume: .6,
+    );
+    await controller.setOffset(-15000);
+    expect(primary.pauseCount, 0);
+    expect(companion.pauseCount, 0);
+    expect(controller.state.value.offsetMs, 0);
+    expect(controller.state.value.message, contains('未能准备'));
+  });
   test('mobile background changes tracks only; return and exit preserve the source and offset', () async {
     final opened = <String>[];
     final primary = _SyncPlayer(position: const Duration(seconds: 30));
@@ -852,7 +913,7 @@ class _PlayerManager extends PlayerManager {
   }
 }
 
-class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer {
+class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer, CommentaryBufferControl {
   _SyncPlayer({required Duration position, this.onOpen, this.onBufferingRead, this.simulatePauseBuffering = false})
     : _currentPosition = position;
 
@@ -869,6 +930,22 @@ class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer {
   bool? initializedAudioOnly;
   bool? sourceAudioOnly;
   final List<bool> audioOnlyModes = [];
+  final List<Duration> bufferReservations = [];
+  int bufferRestores = 0;
+  bool failBufferReservation = false;
+  @override
+  Future<void> reserveSyncBuffer(Duration retainedDelay) async {
+    if (failBufferReservation) throw StateError('native option unavailable');
+    bufferReservations.add(retainedDelay);
+  }
+
+  @override
+  Future<void> restoreSyncBuffer() async {
+    bufferRestores++;
+  }
+
+  @override
+  Future<Duration?> readBufferedAhead() async => const Duration(seconds: 10);
 
   @override
   Future<void> init({bool audioOnly = false}) async {

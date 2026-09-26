@@ -1,4 +1,6 @@
 {
+    "playback_diagnostic_snapshot": "位置 {position}s · 可用缓存 {cache}s\n等待缓存 {buffering} · 暂停 {paused} · 流结束 {eof} · 速度 {speed}x\n累计解码丢帧 {decode} · 累计输出丢帧 {output}",
+    "playback_diagnostic_snapshot_hint": "仅点击时读取，不后台轮询；— 表示不可用。掉帧数是当前原生会话累计值，不是屏幕帧率。卡住时读取一次，数秒后再读取作对照；A/B是独立流，B声音连续不能证明A网络正常。",
     "platform_switch_account": "切换账号（先清除本站会话）",
     "platform_sign_in": "登录 {name}",
     "platform_login_help": "使用平台官方页面登录或扫码。完成后自动保存会话，无需查找 Cookie。会话只保存在本机，不进入备份；登录不保证平台开放所有画质。保存后重新进入直播间。",

@@ -1,4 +1,6 @@
 {
+    "playback_diagnostic_snapshot": "Position {position}s · Cached {cache}s\nWaiting for cache {buffering} · Paused {paused} · End of stream {eof} · Speed {speed}x\nCumulative decoder drops {decode} · Cumulative output drops {output}",
+    "playback_diagnostic_snapshot_hint": "Read only on request, with no background polling; — means unavailable. Drops are cumulative native-session counters, not screen FPS. Read during a stall and again after a few seconds. A/B are independent streams: continuous B audio does not prove A's network is healthy.",
     "platform_switch_account": "Switch account (clear this site's session first)",
     "platform_sign_in": "Sign in to {name}",
     "platform_login_help": "Sign in on the official website using its login or QR options. Your session is saved automatically on this device and excluded from backups. Sign-in does not guarantee all quality tiers. Re-enter the room after saving.",

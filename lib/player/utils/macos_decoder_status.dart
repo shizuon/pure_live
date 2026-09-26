@@ -1,13 +1,16 @@
 import 'dart:async';
 
+import 'playback_diagnostics.dart';
+
 enum MacosDecoderState { inactive, audioOnly, waiting, software, hardware, unavailable }
 
 class MacosDecoderStatus {
-  const MacosDecoderStatus(this.state, {this.decoder = '', this.codec = ''});
+  const MacosDecoderStatus(this.state, {this.decoder = '', this.codec = '', this.diagnostics});
 
   final MacosDecoderState state;
   final String decoder;
   final String codec;
+  final PlaybackDiagnostics? diagnostics;
 
   static Future<MacosDecoderStatus> read(
     Future<String> Function(String) readProperty, {
