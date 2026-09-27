@@ -7,7 +7,8 @@
 Mac Universal DMG/ZIP、Windows x64安装器/便携ZIP及各SHA256、BUILD_METADATA，
 共9个资产，GitHub资产digest和大小均与本机核验产物一致。
 发布时间 `2026-09-27 04:35:58 UTC`，tag目标业务源码 `df46251f`。
-Linux/iOS尚未交付，将补到同一Release；不能把下述历史“等待统一发布”当当前状态。
+Linux随后已核验并补到同一Release，当前共11个资产；iOS尚未交付。
+不能把下述历史“等待统一发布”当当前状态。
 Android仍是Actions临时测试签名APK，不作为正式升级附件。
 
 开发基线 `9bba221a`。沿用 [平台画质审计](PLATFORM_QUALITY_AUDIT_2026_09_26.md)
@@ -169,3 +170,18 @@ master/开发分支。[最终Mac云构建 36248835900](https://github.com/shizuo
 - [Linux运行 36294603764](https://github.com/shizuon/pure_live/actions/runs/36294603764)
   已在Windows核验后启动，仅Linux开启。成功核验后继续iOS，
   并更新公开Release正文、元数据、索引与文档；自动跟进仍保持开启。
+
+### Linux已发布，iOS接续
+
+- Linux `36294603764` 成功，源码 `f18633218740a57a1aa0f5b4f9658d82dc68d764`
+  与最终业务源码仅文档变化。附件 `10922973650` 已下载至
+  `local-artifacts/cloud-final-linux-3.1.0/`。SHA、tar/gzip完整性、安全路径、
+  x64 ELF、Flutter/App库和版本资源 `3.1.0/4113` 均通过，未运行Linux程序。
+- `PureLive-3.1.0-4113-linux-x64.tar.gz`：37963790字节，
+  SHA256 `ccb2ce94fb19f7d9e1be3b96e86337836dcfe278188f73471632c158db882e72`。
+  已上传公开Release并核对GitHub digest/大小；Release元数据和正文已更新。
+- [iOS运行 36295675796](https://github.com/shizuon/pure_live/actions/runs/36295675796)
+  已启动，仅iOS开启，完成后核验普通未签名IPA并补入现有Release。
+- 原自动化更新工具报告任务不存在；已创建当前线程替代任务
+  `pure-live-3-1-0-ios`，每20分钟继续iOS核验、附件/元数据/正文/索引补齐。
+  全部完成才删除该任务，不把已发布桌面包称为全平台完成。

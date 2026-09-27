@@ -2,8 +2,8 @@
 
 版本 `3.1.0+4113`。包含此前双流解说、校准、画面覆盖、三档解码和新增平台功能。
 
-**当前已发布：macOS Universal DMG/ZIP、Windows x64安装器/便携ZIP。**
-Linux和iOS/iPadOS尚待构建核验，完成后补到同一Release，不需要重复下载已有包。
+**当前已发布：macOS Universal DMG/ZIP、Windows x64安装器/便携ZIP、Linux x64归档。**
+iOS/iPadOS尚待构建核验，完成后补到同一Release，不需要重复下载已有包。
 [Android arm64测试APK](https://github.com/shizuon/pure_live/actions/runs/36251790710/artifacts/10909151670)
 为临时测试签名，需登录GitHub下载；附件有效期至2026-09-29 15:27:25 UTC。
 
