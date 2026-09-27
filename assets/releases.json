@@ -3,18 +3,46 @@
     {
       "assets": [
         {
-          "apiUrl": "https://api.github.com/repos/shizuon/pure_live/releases/assets/592169583",
+          "apiUrl": "https://api.github.com/repos/shizuon/pure_live/releases/assets/592216687",
           "contentType": "application/json",
-          "createdAt": "2026-09-27T04:56:05Z",
-          "digest": "sha256:bcb5f96baba078977c3f3beee6a2cd0bb9c8ba5a00d30637ca888531ce70ec6e",
+          "createdAt": "2026-09-27T05:25:10Z",
+          "digest": "sha256:e2bf768a56bde13bca4f45ef15bb20bca6011095973484488f5727e69da07805",
           "downloadCount": 0,
-          "id": "RA_kwDOT-bNd84jS8pv",
+          "id": "RA_kwDOT-bNd84jTIJv",
           "label": "",
           "name": "BUILD_METADATA.json",
-          "size": 2093,
+          "size": 3235,
           "state": "uploaded",
-          "updatedAt": "2026-09-27T04:56:06Z",
+          "updatedAt": "2026-09-27T05:25:10Z",
           "url": "https://github.com/shizuon/pure_live/releases/download/v3.1.0/BUILD_METADATA.json"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/shizuon/pure_live/releases/assets/592212539",
+          "contentType": "application/octet-stream",
+          "createdAt": "2026-09-27T05:22:29Z",
+          "digest": "sha256:9e5e4ab8caf76b705997aade000e077ec5dea6ef69f56b78b225cb2d08e0afb6",
+          "downloadCount": 0,
+          "id": "RA_kwDOT-bNd84jTHI7",
+          "label": "",
+          "name": "PureLive-3.1.0-4113-ios-arm64-unsigned.ipa",
+          "size": 60496611,
+          "state": "uploaded",
+          "updatedAt": "2026-09-27T05:22:36Z",
+          "url": "https://github.com/shizuon/pure_live/releases/download/v3.1.0/PureLive-3.1.0-4113-ios-arm64-unsigned.ipa"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/shizuon/pure_live/releases/assets/592212436",
+          "contentType": "application/octet-stream",
+          "createdAt": "2026-09-27T05:22:25Z",
+          "digest": "sha256:ac181ba5b63e3d4a8225f32c7e530f2c546b0d39a35b70df7e99a389f24609e8",
+          "downloadCount": 0,
+          "id": "RA_kwDOT-bNd84jTHHU",
+          "label": "",
+          "name": "PureLive-3.1.0-4113-ios-arm64-unsigned.ipa.sha256",
+          "size": 109,
+          "state": "uploaded",
+          "updatedAt": "2026-09-27T05:22:25Z",
+          "url": "https://github.com/shizuon/pure_live/releases/download/v3.1.0/PureLive-3.1.0-4113-ios-arm64-unsigned.ipa.sha256"
         },
         {
           "apiUrl": "https://api.github.com/repos/shizuon/pure_live/releases/assets/592153670",
@@ -157,7 +185,7 @@
           "url": "https://github.com/shizuon/pure_live/releases/download/v3.1.0/PureLive-3.1.0-4113-windows-x64-setup.exe.sha256"
         }
       ],
-      "body": "# Pure Live 3.1.0 — 登录与画质\n\n版本 `3.1.0+4113`。包含此前双流解说、校准、画面覆盖、三档解码和新增平台功能。\n\n**当前已发布：macOS Universal DMG/ZIP、Windows x64安装器/便携ZIP、Linux x64归档。**\niOS/iPadOS尚待构建核验，完成后补到同一Release，不需要重复下载已有包。\n[Android arm64测试APK](https://github.com/shizuon/pure_live/actions/runs/36251790710/artifacts/10909151670)\n为临时测试签名，需登录GitHub下载；附件有效期至2026-09-29 15:27:25 UTC。\n\n云端完整606项测试通过；已发布包完成版本、SHA-256及归档完整性核验，\nWindows另通过云端重新下载、安装器安装和PE检查。真实设备体验仍待测试。\n\n- 账号页优先官方网页登录，平台页面提供什么扫码/短信/密码方式就使用什么方式，应用自动保存会话；手动Cookie收进高级选项。B站保留独立扫码。\n- 修正YY回退后仍标原画、B站返回档位不在旧菜单时标错、抖音旧会话遮蔽新登录、Twitch认证头缺失。\n- 快手保留HEVC独有高画质；HLS缺少分辨率不再按码率猜1080P，不同编码/音轨不混为同档线路。\n- 退出账号只清本站网页会话，不再清空其他平台；关闭登录页和二维码页后停止检测，晚到响应不会恢复旧账号。账号会话不进入设置备份。\n- B站弹幕鉴权失败、缺少凭据和断线统一每15秒恢复，重取凭据与账号身份；\n  Kick分区按需加载，不再等待406页全部下载后才显示。\n- 大偏移校准增加缓存预留与低缓存禁止加速保护；累计暂停过长会提示主动重新同步，\n  不静默重开直播。Mac的A/B解码状态增加手动缓存、速度和掉帧计数快照。\n\n**使用**：账号 → 对应平台 → 登录；保存后重新进入直播间，再选择画质。\n登录不保证平台开放原画或特定帧率；会话已保存不等于权益验证通过。\n\n**平台边界**\n\n- Mac：Universal，Intel和Apple Silicon。\n- Windows：x64安装器及便携包；网页登录需要WebView2运行时。\n- Linux：x64归档；现有插件不支持内嵌网页登录，B站可扫码，其他平台保留高级入口。\n- iOS/iPadOS：arm64普通未签名IPA，需要自行签名。\n- Android：arm64测试APK另见构建记录，含共用TV模式。仓库尚无正式签名密钥，\n  临时测试证书可能无法覆盖旧版，不作为正式升级包发布。未提供独立32位或TV仓库构建。\n\n实际下载只以本Release已上传资产为准，构建状态与SHA见\n[完整交付记录](https://github.com/shizuon/pure_live/blob/master/docs/PLATFORM_LOGIN_3_1_0.md)。\n真实设备扫码、验证码、账号原画权限、HDR和长期播放仍需测试，不能由编译通过代替。\n大东彦房间匿名弹幕实网探测超时；自动重连逻辑有测试覆盖，但不宣称该房间已实测恢复。\n大偏移缓存不保证CDN窗口或持续不足的网络可用；同屏卡顿仍需用诊断快照区分网络和呈现。\n",
+      "body": "# Pure Live 3.1.0 — 登录与画质\n\n版本 `3.1.0+4113`。包含此前双流解说、校准、画面覆盖、三档解码和新增平台功能。\n\n**当前已发布：macOS Universal DMG/ZIP、Windows x64安装器/便携ZIP、Linux x64归档、iOS/iPadOS普通未签名IPA。**\niOS IPA已通过版本、arm64设备载荷、Flutter资源、ZIP及SHA-256核验，需要自行签名安装。\n[Android arm64测试APK](https://github.com/shizuon/pure_live/actions/runs/36251790710/artifacts/10909151670)\n为临时测试签名，需登录GitHub下载；附件有效期至2026-09-29 15:27:25 UTC。\n\n云端完整606项测试通过；已发布包完成版本、SHA-256及归档完整性核验，\nWindows另通过云端重新下载、安装器安装和PE检查。真实设备体验仍待测试。\n\n- 账号页优先官方网页登录，平台页面提供什么扫码/短信/密码方式就使用什么方式，应用自动保存会话；手动Cookie收进高级选项。B站保留独立扫码。\n- 修正YY回退后仍标原画、B站返回档位不在旧菜单时标错、抖音旧会话遮蔽新登录、Twitch认证头缺失。\n- 快手保留HEVC独有高画质；HLS缺少分辨率不再按码率猜1080P，不同编码/音轨不混为同档线路。\n- 退出账号只清本站网页会话，不再清空其他平台；关闭登录页和二维码页后停止检测，晚到响应不会恢复旧账号。账号会话不进入设置备份。\n- B站弹幕鉴权失败、缺少凭据和断线统一每15秒恢复，重取凭据与账号身份；\n  Kick分区按需加载，不再等待406页全部下载后才显示。\n- 大偏移校准增加缓存预留与低缓存禁止加速保护；累计暂停过长会提示主动重新同步，\n  不静默重开直播。Mac的A/B解码状态增加手动缓存、速度和掉帧计数快照。\n\n**使用**：账号 → 对应平台 → 登录；保存后重新进入直播间，再选择画质。\n登录不保证平台开放原画或特定帧率；会话已保存不等于权益验证通过。\n\n**平台边界**\n\n- Mac：Universal，Intel和Apple Silicon。\n- Windows：x64安装器及便携包；网页登录需要WebView2运行时。\n- Linux：x64归档；现有插件不支持内嵌网页登录，B站可扫码，其他平台保留高级入口。\n- iOS/iPadOS：arm64普通未签名IPA，需要自行签名。\n- Android：arm64测试APK另见构建记录，含共用TV模式。仓库尚无正式签名密钥，\n  临时测试证书可能无法覆盖旧版，不作为正式升级包发布。未提供独立32位或TV仓库构建。\n\n实际下载只以本Release已上传资产为准，构建状态与SHA见\n[完整交付记录](https://github.com/shizuon/pure_live/blob/master/docs/PLATFORM_LOGIN_3_1_0.md)。\n真实设备扫码、验证码、账号原画权限、HDR和长期播放仍需测试，不能由编译通过代替。\n大东彦房间匿名弹幕实网探测超时；自动重连逻辑有测试覆盖，但不宣称该房间已实测恢复。\n大偏移缓存不保证CDN窗口或持续不足的网络可用；同屏卡顿仍需用诊断快照区分网络和呈现。\n",
       "isDraft": false,
       "isPrerelease": true,
       "name": "Pure Live 3.1.0 — 登录、画质与同步修复",

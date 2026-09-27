@@ -7,7 +7,7 @@
 Mac Universal DMG/ZIP、Windows x64安装器/便携ZIP及各SHA256、BUILD_METADATA，
 共9个资产，GitHub资产digest和大小均与本机核验产物一致。
 发布时间 `2026-09-27 04:35:58 UTC`，tag目标业务源码 `df46251f`。
-Linux随后已核验并补到同一Release，当前共11个资产；iOS尚未交付。
+Linux及iOS随后已核验并补到同一Release，最终共13个资产。
 不能把下述历史“等待统一发布”当当前状态。
 Android仍是Actions临时测试签名APK，不作为正式升级附件。
 
@@ -185,3 +185,22 @@ master/开发分支。[最终Mac云构建 36248835900](https://github.com/shizuo
 - 原自动化更新工具报告任务不存在；已创建当前线程替代任务
   `pure-live-3-1-0-ios`，每20分钟继续iOS核验、附件/元数据/正文/索引补齐。
   全部完成才删除该任务，不把已发布桌面包称为全平台完成。
+
+### iOS已核验与最终交付
+
+- iOS运行 `36295675796` 成功，构建源码
+  `ccd5c8f1d35a7d77369a3252648503aca05b9d64`。与tag业务源码差异仅为
+  发布说明、审计文档及发布索引，不含业务或依赖变化；tag保持 `df46251f` 不移动。
+- 普通未签名附件 `10923739344` 已下载至
+  `local-artifacts/cloud-final-ios-3.1.0/`，不是TrollStore包。
+  `tool/verify_unsigned_ipa.py` 通过：iPhoneOS、arm64主程序及Flutter/App框架、
+  Flutter资源和安全路径；另核对ZIP CRC、`3.1.0 (4113)`、SHA256一致。
+- `PureLive-3.1.0-4113-ios-arm64-unsigned.ipa`：60496611字节，
+  SHA256 `9e5e4ab8caf76b705997aade000e077ec5dea6ef69f56b78b225cb2d08e0afb6`。
+- 已补入现有Release，最终资产为Mac4、Windows4、Linux2、iOS2、
+  BUILD_METADATA 1，共13项。各平台二进制不被文档更新替换，上传后API大小与digest
+  再次校验；Release正文、构建元数据和本仓库发布索引一同更新。
+- 本轮五平台构建和包核验闭环完成，Android保持Actions临时测试签名入口，
+  缺正式签名密钥的限制没有消失；iOS由用户自行签名。没有本地安装/启动或设备测试。
+  扫码、平台权益、HDR、长期播放及大东彦弹幕实网恢复仍不冒称已验证。
+- 完成文档与索引推送后删除 `pure-live-3-1-0-ios` 自动跟进任务。
