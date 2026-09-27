@@ -1073,6 +1073,10 @@ jobs:
 # macOS
 # =========================================================
 
+      - name: Test Apple engine safety helpers
+        shell: bash
+        run: bash tool/test_ios_engine_safety.sh
+
       - name: Build macOS release
         if: ${{ (github.event_name == 'push' && startsWith(github.ref_name, 'stage-macos-')) || inputs.build_macos }}
         run: |

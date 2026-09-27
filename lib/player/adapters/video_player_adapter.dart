@@ -8,6 +8,8 @@ import '../interface/unified_player_interface.dart';
 import 'package:pure_live/player/models/player_engine.dart';
 import 'package:better_player_plus/better_player_plus.dart';
 import 'package:pure_live/player/interface/video_player_accessor.dart';
+import 'package:flutter/foundation.dart';
+import 'package:pure_live/player/utils/mobile_engine_policy.dart';
 
 
 
@@ -141,6 +143,9 @@ class BetterPlayerAdapter implements UnifiedPlayer, BetterPlayerAccessor {
       _widthSubject.add(null);
       _heightSubject.add(null);
       _completeSubject.add(false);
+      if (MobileEnginePolicy.isKnownUnsupportedAvPlayerSource(url, defaultTargetPlatform)) {
+        throw UnsupportedError('AVPlayer on iOS cannot open FLV/RTMP; select MediaKit or IJK');
+      }
       BetterPlayerDataSource dataSource = BetterPlayerDataSource(
         BetterPlayerDataSourceType.network,
         url,

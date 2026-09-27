@@ -254,8 +254,9 @@ extension BetterPlayerPlugin {
             }
             result(nil)
         case "dispose":
-            player.clear()
             disposeNotificationData(player)
+            player.dispose()
+            dataSourceDict.removeValue(forKey: textureId)
             setRemoteCommandsNotificationNotActive()
             players.removeValue(forKey: textureId)
             if players.isEmpty { try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation]) }

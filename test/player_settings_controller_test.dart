@@ -4,10 +4,20 @@ import 'package:pure_live/common/services/settings/player_settings_controller.da
 
 void main() {
   group('player settings migration', () {
-    test('uses IJK only for a new iOS configuration', () {
-      expect(defaultVideoPlayerKeyForPlatform(TargetPlatform.iOS), 'ijk');
+    test('new iOS and other configurations default to MediaKit', () {
+      expect(defaultVideoPlayerKeyForPlatform(TargetPlatform.iOS), 'mpv');
       expect(defaultVideoPlayerKeyForPlatform(TargetPlatform.android), 'mpv');
       expect(defaultVideoPlayerKeyForPlatform(TargetPlatform.windows), 'mpv');
+    });
+    test('existing explicit IJK and AVPlayer choices survive settings import', () {
+      for (final key in ['ijk', 'exo', 'mpv']) {
+        expect(
+          PlayerSettingsController.extractConfig({
+            'player': {'videoPlayerKey': key},
+          })['videoPlayerKey'],
+          key,
+        );
+      }
     });
 
     test('retires the legacy global audio-only default', () {

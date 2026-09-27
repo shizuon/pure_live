@@ -6,7 +6,7 @@ import 'package:pure_live/player/core/portrait_stream_support.dart';
 import 'package:pure_live/player/models/macos_decode_mode.dart';
 
 @visibleForTesting
-String defaultVideoPlayerKeyForPlatform(TargetPlatform platform) => platform == TargetPlatform.iOS ? 'ijk' : 'mpv';
+String defaultVideoPlayerKeyForPlatform(TargetPlatform platform) => 'mpv';
 
 String get _defaultVideoPlayerKey => defaultVideoPlayerKeyForPlatform(defaultTargetPlatform);
 

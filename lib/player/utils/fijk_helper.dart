@@ -1,4 +1,7 @@
 import 'package:pure_live/common/index.dart';
+import 'package:flutter/foundation.dart';
+
+import 'mobile_engine_policy.dart';
 
 class FijkHelper {
   static Future<void> setFijkOption(
@@ -6,11 +9,10 @@ class FijkHelper {
     bool enableHardwareCodec = false,
     Map<String, String>? headers,
   }) async {
-    await player.setOption(FijkOption.playerCategory, 'mediacodec', enableHardwareCodec ? 1 : 0);
-    await player.setOption(FijkOption.playerCategory, 'mediacodec-hevc', enableHardwareCodec ? 1 : 0);
-    await player.setOption(FijkOption.playerCategory, 'videotoolbox', enableHardwareCodec ? 1 : 0);
+    for (final option in MobileEnginePolicy.ijkPlayerOptions(defaultTargetPlatform, enableHardwareCodec).entries) {
+      await player.setOption(FijkOption.playerCategory, option.key, option.value);
+    }
     await player.setOption(FijkOption.playerCategory, 'start-on-prepared', 0);
-    await player.setOption(FijkOption.playerCategory, 'overlay-format', 0x52474238);
     await player.setOption(FijkOption.playerCategory, 'min-frames', 50);
     await player.setOption(FijkOption.playerCategory, 'framedrop', 0);
     await player.setOption(FijkOption.playerCategory, 'enable-accurate-seek', 1);
@@ -29,11 +31,13 @@ class FijkHelper {
       'async,cache,crypto,file,http,https,ijkhttphook,ijkinject,ijklivehook,ijklongurl,ijksegment,ijktcphook,pipe,rtp,tcp,tls,udp,ijkurlhook,data',
     );
     String requestHeaders = '';
-    headers?.forEach((key, value) {
-      key.toLowerCase() == 'user-agent'
-          ? player.setOption(FijkOption.formatCategory, 'user_agent', value)
-          : requestHeaders += '$key:$value\r\n';
-    });
+    for (final header in (headers ?? <String, String>{}).entries) {
+      if (header.key.toLowerCase() == 'user-agent') {
+        await player.setOption(FijkOption.formatCategory, 'user_agent', header.value);
+      } else {
+        requestHeaders += '${header.key}:${header.value}\r\n';
+      }
+    }
     if (requestHeaders.isNotEmpty) {
       await player.setOption(FijkOption.formatCategory, 'headers', requestHeaders);
     }

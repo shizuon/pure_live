@@ -7,6 +7,9 @@
   不再无意义循环；网络错误继续恢复，并显示不含账号凭据的失败阶段/数字码。
 - 清理退役的斗鱼专用登录页面及8个重复/低价值测试，保留共用登录安全、
   弹幕恢复、双流同步及退出回归。不以删测试数量代表修复质量或播放器提速。
+- 修订iOS IJK像素格式/引用交付、AVPlayer直播时长/观察者/退出释放的原生风险；
+  iOS菜单按真实后端显示AVPlayer，已知FLV/RTMP交给其他内核。新安装默认MediaKit，
+  保留用户既有内核选项，IJK/AVPlayer入口仍可选。
 
 遇到“请重新登录”时，在账号页退出并重新登录B站，再刷新直播间。
 网络或平台风控错误与登录失效不同，仍可能暂时无法连接。
@@ -15,3 +18,5 @@
 完整记录见 [B站鉴权排查](https://github.com/shizuon/pure_live/blob/master/docs/BILIBILI_AUTH_3_1_1.md)。
 不同客户端以实际上传产物为准；Android缺正式密钥时仅提供临时测试APK，
 iOS提供普通未签名IPA自行签名，Linux保留B站扫码和高级会话入口。
+原生工具级测试及612项Flutter回归通过，但没有用户设备崩溃栈，
+不能宣称iOS闪退已经实机闭合。详见 [iOS内核排查](https://github.com/shizuon/pure_live/blob/master/docs/IOS_ENGINE_CRASH_3_1_1.md)。

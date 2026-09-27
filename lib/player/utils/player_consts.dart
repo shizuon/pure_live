@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:pure_live/player/models/player_engine.dart';
 
 class PlayerConsts {
@@ -10,7 +11,11 @@ class PlayerConsts {
     'exo': PlayerEngine.exo,
   };
 
-  static const Map<String, String> names = {'mpv': 'player_mpv', 'ijk': 'player_ijk', 'exo': 'player_exo'};
+  static Map<String, String> get names => {
+    'mpv': 'player_mpv',
+    'ijk': 'player_ijk',
+    'exo': defaultTargetPlatform == TargetPlatform.iOS ? 'player_avplayer' : 'player_exo',
+  };
 
   static String getKeyByI18nKey(String i18nKey) {
     return names.entries.firstWhere((e) => e.value == i18nKey, orElse: () => names.entries.first).key;

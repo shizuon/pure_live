@@ -93,3 +93,8 @@ AngelLive历史 `1f7a4bea` 的BilibiliCookieManager通过官方直播网页WebVi
   从此源码运行完整质量及Mac构建，尚未完成安装包验证或发布。
 - 当前线程低频任务 `pure-live-3-1-1` 每20分钟跟进失败修复、串行各平台构建、
   下载核验、Release与索引闭环，全部完成才删除，不复用3.1.0旧产物。
+
+用户随后反馈iOS IJK/AVPlayer进入房间闪退，同批并入
+[iOS原生修复](IOS_ENGINE_CRASH_3_1_1.md)，最终完整回归增至612项通过。
+旧Mac run36327981449不含原生补丁，不作为最终交付；先完成新的iOS构建，
+随后再Mac/Android/Windows/Linux串行交付。

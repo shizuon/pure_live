@@ -24,6 +24,7 @@
 #import "FijkHostOption.h"
 #import "FijkPlugin.h"
 #import "FijkQueuingEventSink.h"
+#import "FijkPixelBufferMailbox.h"
 
 #import <Flutter/Flutter.h>
 #import <Foundation/Foundation.h>
@@ -51,8 +52,7 @@ static atomic_int atomicId = 0;
     id<FlutterPluginRegistrar> _registrar;
     id<FlutterTextureRegistry> _textureRegistry;
 
-    CVPixelBufferRef volatile _latestPixelBuffer;
-    CVPixelBufferRef _lastBuffer;
+    FijkPixelBufferMailbox *_pixelBuffers;
 
     int _width;
     int _height;
@@ -82,6 +82,7 @@ static int renderType = 0;
 - (instancetype)initJustTexture {
     self = [super init];
     if (self) {
+        _pixelBuffers = [[FijkPixelBufferMailbox alloc] init];
         int pid = atomic_fetch_add(&atomicId, 1);
         _playerId = @(pid);
         _pid = pid;
@@ -98,13 +99,12 @@ static int renderType = 0;
         _playerId = @(pid);
         _pid = pid;
         _eventSink = [[FijkQueuingEventSink alloc] init];
-        _latestPixelBuffer = nil;
+        _pixelBuffers = [[FijkPixelBufferMailbox alloc] init];
         _vid = -1;
         _rotate = -1;
         _state = 0;
 
         _hostOption = [[FijkHostOption alloc] init];
-        _lastBuffer = nil;
         if (renderType == 0) {
             _ijkMediaPlayer = [[IJKFFMediaPlayer alloc] init];
             [_ijkMediaPlayer setOptionValue:@"fcc-bgra"
@@ -161,6 +161,7 @@ static int renderType = 0;
 }
 
 - (void)shutdown {
+    [_pixelBuffers close];
     [self handleEvent:IJKMPET_PLAYBACK_STATE_CHANGED
               andArg1:end
               andArg2:_state
@@ -175,19 +176,6 @@ static int renderType = 0;
         _textureRegistry = nil;
     }
 
-    CVPixelBufferRef old = _latestPixelBuffer;
-    while (!OSAtomicCompareAndSwapPtrBarrier(old, nil,
-                                             (void **)&_latestPixelBuffer)) {
-        old = _latestPixelBuffer;
-    }
-    if (old) {
-        CFRelease(old);
-    }
-
-    if (_lastBuffer) {
-        CVPixelBufferRelease(_lastBuffer);
-        _lastBuffer = nil;
-    }
     [_methodChannel setMethodCallHandler:nil];
     _methodChannel = nil;
 
@@ -212,41 +200,20 @@ static int renderType = 0;
 // IJKCVPBViewProtocol delegate
 // IJKFFMediaPlayer will incoke this method whem new frame should be displayed
 - (void)display_pixelbuffer:(CVPixelBufferRef)pixelbuffer {
-
-    if (_lastBuffer == nil) {
-        _lastBuffer = CVPixelBufferRetain(pixelbuffer);
-        CFRetain(pixelbuffer);
-    } else if (_lastBuffer != pixelbuffer) {
-        CVPixelBufferRelease(_lastBuffer);
-        _lastBuffer = CVPixelBufferRetain(pixelbuffer);
-        CFRetain(pixelbuffer);
-    }
-
-    CVPixelBufferRef newBuffer = pixelbuffer;
-
-    CVPixelBufferRef old = _latestPixelBuffer;
-    while (!OSAtomicCompareAndSwapPtrBarrier(old, newBuffer,
-                                             (void **)&_latestPixelBuffer)) {
-        old = _latestPixelBuffer;
-    }
-
-    if (old && old != pixelbuffer) {
-        CFRelease(old);
-    }
-    if (_vid >= 0) {
-        [_textureRegistry textureFrameAvailable:_vid];
-    }
+    if (![_pixelBuffers publish:pixelbuffer]) return;
+    __weak FijkPlayer *weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        FijkPlayer *strongSelf = weakSelf;
+        if (strongSelf != nil && strongSelf->_vid >= 0) {
+            [strongSelf->_textureRegistry textureFrameAvailable:strongSelf->_vid];
+        }
+    });
 }
 
 // After textureFrameAvailable has been called
 // Flutter engine call this to get new CVPixelBufferRef to render
 - (CVPixelBufferRef _Nullable)copyPixelBuffer {
-    CVPixelBufferRef pixelBuffer = _latestPixelBuffer;
-    while (!OSAtomicCompareAndSwapPtrBarrier(pixelBuffer, nil,
-                                             (void **)&_latestPixelBuffer)) {
-        pixelBuffer = _latestPixelBuffer;
-    }
-    return pixelBuffer;
+    return [_pixelBuffers copyPixelBuffer];
 }
 
 - (NSNumber *)setupSurface {
