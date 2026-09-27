@@ -1,5 +1,15 @@
 # 3.1.0：实际画质与账号登录
 
+## 当前公开交付（2026-09-27）
+
+用户要求先发布已经构建好的包，现已公开
+[v3.1.0测试版Release](https://github.com/shizuon/pure_live/releases/tag/v3.1.0)：
+Mac Universal DMG/ZIP、Windows x64安装器/便携ZIP及各SHA256、BUILD_METADATA，
+共9个资产，GitHub资产digest和大小均与本机核验产物一致。
+发布时间 `2026-09-27 04:35:58 UTC`，tag目标业务源码 `df46251f`。
+Linux/iOS尚未交付，将补到同一Release；不能把下述历史“等待统一发布”当当前状态。
+Android仍是Actions临时测试签名APK，不作为正式升级附件。
+
 开发基线 `9bba221a`。沿用 [平台画质审计](PLATFORM_QUALITY_AUDIT_2026_09_26.md)
 的逐平台复现和来源判断；本批独立工作区，不修改3.0.24构建提交。
 用户授权全部已确认问题修复、统一易用登录、检查后合并master，版本改为3.1.0。
@@ -143,3 +153,19 @@ master/开发分支。[最终Mac云构建 36248835900](https://github.com/shizuo
 - [最终Windows运行 36252815489](https://github.com/shizuon/pure_live/actions/runs/36252815489)
   已在Android下载核验后启动，仅Windows开启；须安装器/便携包及云端重新下载验证
   全部成功后再继续Linux、iOS。全平台Release仍未发布。
+
+### Windows已核验，Linux接续
+
+- Windows运行 `36252815489` 成功，源码 `9c84ea60f149eb587d4ed54692f1f8177a6958ca`
+  与最终业务源码仅文档不同。云端重新下载、安装器安装、便携解压和PE检查均通过。
+  本机下载后ZIP CRC、版本资源 `3.1.0/4113`、x64 PE、Flutter库和两包SHA通过，
+  没有在本机启动或安装Windows程序。
+- `PureLive-3.1.0-4113-windows-x64-setup.exe`：59019051字节，
+  SHA256 `217b94845724ebd2701685168bab594aec28d6338bcdc700a9f0b6cef2d0769c`。
+- `PureLive-3.1.0-4113-windows-x64-portable.zip`：74009129字节，
+  SHA256 `17ded20fee9cc6c6d2962fca172d29aa4cb17046449948b5c1b1c9d708c9a8d1`。
+- Windows附件 `10909554344`；本机证据 `local-artifacts/cloud-final-windows-3.1.0/`，
+  日志 `local-artifacts/cloud-final-windows-3.1.0.log`。
+- [Linux运行 36294603764](https://github.com/shizuon/pure_live/actions/runs/36294603764)
+  已在Windows核验后启动，仅Linux开启。成功核验后继续iOS，
+  并更新公开Release正文、元数据、索引与文档；自动跟进仍保持开启。
