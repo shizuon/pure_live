@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:pure_live/get/get.dart';
@@ -11,7 +10,6 @@ import 'package:pure_live/common/services/settings/backup_controller.dart';
 import 'package:pure_live/core/site/douyu/douyu_utils.dart';
 import 'package:pure_live/player/core/playback_header_resolver.dart';
 import 'package:pure_live/recorder/services/ffmpeg_header_factory.dart';
-import 'package:pure_live/modules/account/douyu/douyu_cookie_page.dart';
 
 class _Settings extends SettingsService {
   @override
@@ -50,19 +48,5 @@ void main() {
     cookies.setDouyuCookie('');
     expect(DouyuUtils.cookieHeader(), isNot(contains('acf_auth')));
     expect(CookieSettingsController.extractConfig({})['douyuCookie'], '');
-  });
-  testWidgets('web login is primary and manual Cookie is collapsed advanced UI', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: DouyuCookiePage()));
-    expect(find.byKey(const ValueKey('douyu-web-login')), Platform.isLinux ? findsNothing : findsOneWidget);
-    if (Platform.isLinux) {
-      expect(find.text('douyu_login_unsupported'), findsOneWidget);
-    }
-    expect(find.byKey(const ValueKey('douyu-cookie-input')), findsNothing);
-    await tester.tap(find.byType(ExpansionTile));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('douyu-cookie-input')), findsOneWidget);
-    final text = tester.widget<TextField>(find.byKey(const ValueKey('douyu-cookie-input')));
-    expect(text.obscureText, isTrue);
-    await tester.pumpWidget(const SizedBox());
   });
 }

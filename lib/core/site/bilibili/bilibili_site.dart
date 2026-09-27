@@ -12,6 +12,9 @@ import 'package:pure_live/core/common/convert_helper.dart';
 import 'package:pure_live/core/interface/live_danmaku.dart';
 import 'package:pure_live/core/danmaku/bilibili_danmaku.dart';
 import 'package:pure_live/core/utils/live_quality_label.dart';
+
+import 'bilibili_session.dart';
+
 import 'package:pure_live/modules/live_play/controllers/player_controller.dart';
 
 class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomResolver, LivePlayUrlResolver {
@@ -32,12 +35,20 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
   static String buvid3 = "";
   static String buvid4 = "";
   static Future<Map>? _buvidRequest;
+  static String? _buvidCookieSnapshot;
   String accessId = "";
 
   Future<Map<String, String>> getHeader() async {
     final storedCookie = cookie;
-    final cookieBuvid3 = RegExp(r'(?:^|;)\s*buvid3=([^;]+)').firstMatch(storedCookie)?.group(1) ?? '';
-    final cookieBuvid4 = RegExp(r'(?:^|;)\s*buvid4=([^;]+)').firstMatch(storedCookie)?.group(1) ?? '';
+    final fields = parseBilibiliCookie(storedCookie);
+    if (_buvidCookieSnapshot != storedCookie) {
+      _buvidCookieSnapshot = storedCookie;
+      buvid3 = '';
+      buvid4 = '';
+      _buvidRequest = null;
+    }
+    final cookieBuvid3 = fields['buvid3'] ?? '';
+    final cookieBuvid4 = fields['buvid4'] ?? '';
     if (cookieBuvid3.isNotEmpty) {
       buvid3 = cookieBuvid3;
       buvid4 = cookieBuvid4;
@@ -46,19 +57,23 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
       final request = _buvidRequest ??= getBuvid();
       try {
         final buvidInfo = await request;
+        if (cookie != storedCookie || _buvidCookieSnapshot != storedCookie) {
+          throw const BilibiliDiscoveryFailure('账号已切换，重新获取弹幕凭据');
+        }
         buvid3 = buvidInfo["b_3"]?.toString() ?? "";
         buvid4 = buvidInfo["b_4"]?.toString() ?? "";
       } finally {
         if (identical(_buvidRequest, request)) _buvidRequest = null;
       }
     }
-    return storedCookie.isEmpty
-        ? {"user-agent": kDefaultUserAgent, "referer": kDefaultReferer, "cookie": 'buvid3=$buvid3;buvid4=$buvid4;'}
-        : {
-            "cookie": storedCookie.contains("buvid3") ? storedCookie : "$storedCookie;buvid3=$buvid3;buvid4=$buvid4;",
-            "user-agent": kDefaultUserAgent,
-            "referer": kDefaultReferer,
-          };
+    if (buvid3.isEmpty) throw const BilibiliDiscoveryFailure('B站设备标识获取失败');
+    fields['buvid3'] = buvid3;
+    if (buvid4.isNotEmpty) fields['buvid4'] = buvid4;
+    return {
+      'user-agent': kDefaultUserAgent,
+      'referer': kDefaultReferer,
+      'cookie': fields.entries.map((e) => '${e.key}=${e.value}').join('; '),
+    };
   }
 
   @override
@@ -579,43 +594,64 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
     return queryParams;
   }
 
-  Future<BiliBiliDanmakuArgs> _discoverDanmaku(int realRoomId, {int maxAttempts = 4}) async {
+  Future<BiliBiliDanmakuArgs> _discoverDanmaku(
+    int realRoomId, {
+    int maxAttempts = 1,
+    bool refreshSigningKeys = false,
+  }) async {
     const baseUrl = "https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo";
     final accountSnapshot = cookie;
     final headers = await getHeader();
     if (cookie != accountSnapshot) throw StateError('Bilibili account changed during discovery');
     final cookieSnapshot = headers['cookie'] ?? '';
-    var uid = resolveDanmakuUid(cookieSnapshot);
-    // Manual cookies can omit DedeUserID. Resolve the identity with the same
-    // header snapshot rather than using the previous account's cached uid.
-    if (uid == 0 && RegExp(r'(?:^|;)\s*SESSDATA=[^;]+').hasMatch(cookieSnapshot)) {
+    var uid = 0;
+    // A saved Cookie is not proof of an authenticated account. Validate every
+    // recovery, even if DedeUserID exists, without overwriting user's settings
+    // or silently downgrading an authenticated request to a guest session.
+    if ((parseBilibiliCookie(cookieSnapshot)['SESSDATA'] ?? '').isNotEmpty) {
       final nav = await HttpClient.instance.getJson('https://api.bilibili.com/x/web-interface/nav', header: headers);
-      if (nav is! Map || nav['code'] != 0 || nav['data']?['isLogin'] != true) {
-        throw StateError('Bilibili account session unavailable');
+      if (cookie != accountSnapshot) throw const BilibiliDiscoveryFailure('账号已切换，重新获取弹幕凭据');
+      final navCode = nav is Map ? int.tryParse('${nav['code']}') : null;
+      if (navCode == -101 || (navCode == 0 && nav['data']?['isLogin'] == false)) {
+        throw const BilibiliSessionExpired();
+      }
+      if (navCode != 0 || nav['data']?['isLogin'] != true) {
+        throw BilibiliDiscoveryFailure('登录状态验证暂不可用', code: navCode);
       }
       uid = int.tryParse(nav['data']?['mid']?.toString() ?? '') ?? 0;
-      if (uid <= 0) throw StateError('Bilibili account identity missing');
+      if (uid <= 0) throw const BilibiliDiscoveryFailure('登录账号身份暂不可用');
+      final cookieUid = resolveDanmakuUid(cookieSnapshot);
+      if (cookieUid != 0 && cookieUid != uid) throw const BilibiliSessionExpired();
     }
     Map<String, dynamic>? data;
     Object? lastError;
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        final signed = await getWbiSign('$baseUrl?id=$realRoomId&type=0', forceRefresh: attempt == 1 || attempt == 3);
+        final signed = await getWbiSign(
+          '$baseUrl?id=$realRoomId&type=0',
+          forceRefresh: refreshSigningKeys || attempt > 0,
+        );
         final response = await HttpClient.instance.getJson(baseUrl, queryParameters: signed, header: headers);
         final candidate = response['data'];
         if (response['code'] == 0 && candidate is Map && candidate['token']?.toString().isNotEmpty == true) {
           data = Map<String, dynamic>.from(candidate);
           break;
         }
-        lastError = StateError('getDanmuInfo code=${response['code']}');
+        final code = int.tryParse('${response['code']}');
+        if (code == -101) throw const BilibiliSessionExpired();
+        // A later room refresh must not reuse rejected keys for six hours.
+        if (code == -403 || code == -352) _wbiKeysUpdatedAt = null;
+        lastError = BilibiliDiscoveryFailure('弹幕凭据接口拒绝请求', code: code);
+      } on BilibiliSessionExpired {
+        rethrow;
       } catch (error) {
-        lastError = error;
+        lastError = error is BilibiliDiscoveryFailure ? error : const BilibiliDiscoveryFailure('弹幕凭据请求失败');
       }
       if (attempt + 1 < maxAttempts) {
         await Future<void>.delayed(Duration(milliseconds: 180 * (attempt + 1)));
       }
     }
-    if (data == null) throw StateError('Bilibili danmaku discovery failed: $lastError');
+    if (data == null) throw lastError ?? const BilibiliDiscoveryFailure('弹幕凭据缺失');
     if (cookie != accountSnapshot) throw StateError('Bilibili account changed during discovery');
 
     // The generic gateway has stable public DNS while some ISP/mobile DNS
@@ -646,7 +682,7 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
         'referer': 'https://live.bilibili.com/$realRoomId',
         if ((headers['cookie'] ?? '').isNotEmpty) 'cookie': headers['cookie'],
       },
-      refresh: () => _discoverDanmaku(realRoomId, maxAttempts: 1),
+      refresh: () => _discoverDanmaku(realRoomId, refreshSigningKeys: true),
     );
   }
 
@@ -686,7 +722,7 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
             'referer': 'https://live.bilibili.com/$realRoomId',
             if ((headers['cookie'] ?? '').isNotEmpty) 'cookie': headers['cookie'],
           },
-          refresh: () => _discoverDanmaku(int.tryParse(realRoomId) ?? 0, maxAttempts: 1),
+          refresh: () => _discoverDanmaku(int.tryParse(realRoomId) ?? 0, refreshSigningKeys: true),
         );
       }
       return _buildRoom(roomInfo, roomId: roomId, danmakuData: danmakuArgs);
@@ -854,17 +890,16 @@ class BiliBiliSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoo
 
   Future<Map> getBuvid() async {
     try {
-      if (cookie.contains("buvid3")) {
-        return {
-          "b_3": RegExp(r"buvid3=(.*?);").firstMatch(cookie)?.group(1) ?? "",
-          "b_4": RegExp(r"buvid4=(.*?);").firstMatch(cookie)?.group(1) ?? "",
-        };
+      final snapshot = cookie;
+      final fields = parseBilibiliCookie(snapshot);
+      if ((fields['buvid3'] ?? '').isNotEmpty) {
+        return {"b_3": fields['buvid3'], "b_4": fields['buvid4'] ?? ''};
       }
 
       var result = await HttpClient.instance.getJson(
         "https://api.bilibili.com/x/frontend/finger/spi",
         queryParameters: {},
-        header: {"user-agent": kDefaultUserAgent, "referer": kDefaultReferer, "cookie": cookie},
+        header: {"user-agent": kDefaultUserAgent, "referer": kDefaultReferer, "cookie": snapshot},
       );
       return result["data"];
     } catch (e) {

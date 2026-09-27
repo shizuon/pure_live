@@ -53,6 +53,11 @@ void main() {
     expect(PlatformLoginProfile.of('douyin').hasSession('sessionid=token'), isTrue);
     expect(PlatformLoginProfile.of('douyu').ownsDomain('passport.douyu.com'), isTrue);
     expect(PlatformLoginProfile.of('douyu').ownsDomain('fake-douyu.com'), isFalse);
+    final douyu = PlatformLoginProfile.of('douyu');
+    expect(douyu.hasSession('acf_uid=42; acf_auth=valid'), isTrue);
+    for (final value in ['acf_uid=0; acf_auth=valid', 'acf_uid=42', 'acf_uid=42; acf_auth=deleted']) {
+      expect(douyu.hasSession(value), isFalse);
+    }
   });
   test('capture cannot save after close or twice; errors permit retry', () async {
     final pending = Completer<String>();
@@ -78,6 +83,21 @@ void main() {
     expect(await retry.check(), isTrue);
     expect(await retry.check(), isFalse);
     expect(saved, hasLength(1));
+  });
+  test('visitor cookies keep the current login route waiting until an account session exists', () async {
+    var value = 'dy_did=visitor';
+    final saved = <String>[];
+    final capture = PlatformLoginCapture(
+      read: () async => value,
+      accept: PlatformLoginProfile.of('douyu').hasSession,
+      save: saved.add,
+    );
+    expect(await capture.check(), isFalse);
+    expect(saved, isEmpty);
+    value = 'acf_uid=42; acf_auth=fixture';
+    expect(await capture.check(), isTrue);
+    expect(saved, [value]);
+    capture.close();
   });
   test('account sessions persist locally, never exported, empty backup does not log out', () async {
     for (final p in PlatformLoginProfile.profiles) {

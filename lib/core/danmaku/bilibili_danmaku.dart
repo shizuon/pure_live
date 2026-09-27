@@ -14,6 +14,11 @@ import 'package:pure_live/common/models/live_message.dart';
 import 'package:pure_live/core/common/convert_helper.dart';
 import 'package:pure_live/core/common/web_socket_util.dart';
 import 'package:pure_live/core/interface/live_danmaku.dart';
+import 'package:pure_live/core/site/bilibili/bilibili_session.dart';
+
+class _CredentialWaitExpired implements Exception {
+  const _CredentialWaitExpired();
+}
 
 class BiliBiliDanmakuArgs {
   final int roomId;
@@ -132,18 +137,21 @@ class BiliBiliDanmaku implements LiveDanmaku {
         if (pending == null) {
           final operation = Future<BiliBiliDanmakuArgs?>.sync(args.refresh!);
           _pendingRefresh = pending = operation;
-          unawaited(
-            operation.then<void>(
-              (_) {
-                if (identical(_pendingRefresh, operation)) _pendingRefresh = null;
-              },
-              onError: (Object _, StackTrace __) {
-                if (identical(_pendingRefresh, operation)) _pendingRefresh = null;
-              },
-            ),
-          );
+          // Keep the completed result until a retry consumes it. Clearing it
+          // on completion discarded discoveries that finished between the
+          // 12s deadline and the next 15s retry, causing a slow login loop.
+          unawaited(operation.then<void>((_) {}, onError: (Object _, StackTrace _) {}));
         }
-        final updated = await pending.timeout(discoveryTimeout);
+        BiliBiliDanmakuArgs? updated;
+        try {
+          updated = await pending.timeout(discoveryTimeout, onTimeout: () => throw const _CredentialWaitExpired());
+          if (identical(_pendingRefresh, pending)) _pendingRefresh = null;
+        } on _CredentialWaitExpired {
+          rethrow; // Retain pending discovery for the next retry.
+        } catch (_) {
+          if (identical(_pendingRefresh, pending)) _pendingRefresh = null;
+          rethrow;
+        }
         if (!_owns(generation, attempt)) return;
         if (updated == null || updated.roomId != args.roomId || updated.token.isEmpty) {
           throw StateError('Invalid refreshed danmaku credentials');
@@ -168,7 +176,9 @@ class BiliBiliDanmaku implements LiveDanmaku {
           if (!_owns(generation, attempt)) return;
           _authTimer?.cancel();
           _authTimer = Timer(authTimeout, () {
-            if (_owns(generation, attempt) && !isConnected) _scheduleRetry(generation, attempt);
+            if (_owns(generation, attempt) && !isConnected) {
+              _scheduleRetry(generation, attempt, reason: '弹幕鉴权响应超时');
+            }
           });
           joinRoom(args);
         },
@@ -176,7 +186,7 @@ class BiliBiliDanmaku implements LiveDanmaku {
           if (_owns(generation, attempt) && isConnected) heartbeat();
         },
         onClose: (e) {
-          if (_owns(generation, attempt)) _scheduleRetry(generation, attempt);
+          if (_owns(generation, attempt)) _scheduleRetry(generation, attempt, reason: '弹幕网络连接中断');
         },
       );
       // No second retry loop inside the transport. Failure delegates to this
@@ -184,12 +194,36 @@ class BiliBiliDanmaku implements LiveDanmaku {
       socket.maxReconnectTime = 0;
       webScoketUtils = socket;
       await socket.connect().timeout(const Duration(seconds: 12));
-    } catch (_) {
-      if (_owns(generation, attempt)) _scheduleRetry(generation, attempt);
+    } on BilibiliSessionExpired {
+      if (_owns(generation, attempt)) _waitForLogin();
+    } catch (error) {
+      if (_owns(generation, attempt)) {
+        _scheduleRetry(
+          generation,
+          attempt,
+          reason: error is BilibiliDiscoveryFailure
+              ? error.toString()
+              : error is TimeoutException || error is _CredentialWaitExpired
+              ? '弹幕凭据或握手超时'
+              : '弹幕凭据请求失败',
+        );
+      }
     }
   }
 
-  void _scheduleRetry(int generation, int attempt) {
+  void _waitForLogin() {
+    _attempt++;
+    _authTimer?.cancel();
+    _retryTimer?.cancel();
+    _pendingRefresh = null;
+    markDisconnected();
+    final previous = webScoketUtils;
+    webScoketUtils = null;
+    unawaited(previous?.close() ?? Future<void>.value());
+    onClose?.call(const BilibiliSessionExpired().toString());
+  }
+
+  void _scheduleRetry(int generation, int attempt, {String reason = '与服务器断开连接'}) {
     if (!_owns(generation, attempt)) return;
     _attempt++; // Reject buffered packets and late handshake/auth callbacks.
     _endpointIndex++;
@@ -205,7 +239,7 @@ class BiliBiliDanmaku implements LiveDanmaku {
       if (!_stopped && generation == _generation) unawaited(_connect(generation, refresh: true));
     });
     // Existing page controller treats this as transient and retains ownership.
-    onClose?.call("与服务器断开连接，正在尝试重连（15秒后）");
+    onClose?.call("$reason，正在尝试重连（15秒后）");
   }
 
   Map<String, dynamic> buildJoinPayload(BiliBiliDanmakuArgs args) => {
@@ -370,7 +404,7 @@ class BiliBiliDanmaku implements LiveDanmaku {
       } else if (code != 0) {
         _authTimer?.cancel();
         markDisconnected();
-        _scheduleRetry(_generation, _attempt);
+        _scheduleRetry(_generation, _attempt, reason: '弹幕鉴权被拒绝（code=$code）');
       }
     }
   }

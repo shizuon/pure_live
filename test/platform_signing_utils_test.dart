@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pure_live/core/site/douyu/douyu_utils.dart';
+import 'package:pure_live/core/site/douyu/douyu_cookie.dart';
 import 'package:pure_live/core/utils/douyin/douyin_utils.dart';
 
 void main() {
@@ -49,6 +50,13 @@ void main() {
     });
 
     test('session identity and playback headers stay internally consistent', () {
+      expect(
+        buildDouyuCookieHeader(
+          'Cookie: acf_auth=abc==;\r\n acf_uid=123; dy_did=old; ACF_DID=other; broken; bad name=x',
+          'session-device',
+        ),
+        'dy_did=session-device; acf_did=session-device; acf_auth=abc==; acf_uid=123',
+      );
       expect(DouyuUtils.deviceId, matches(RegExp(r'^[0-9a-f]{32}$')));
 
       final headers = DouyuUtils.playbackHeaders('123');

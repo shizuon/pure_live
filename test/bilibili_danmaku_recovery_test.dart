@@ -6,6 +6,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pure_live/core/danmaku/bilibili_danmaku.dart';
 import 'package:pure_live/core/site/bilibili/bilibili_site.dart';
+import 'package:pure_live/core/site/bilibili/bilibili_session.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
 
@@ -77,6 +78,77 @@ class _Sink implements WebSocketSink {
 }
 
 void main() {
+  test('discovery completing after timeout is consumed on retry instead of requested forever', () {
+    fakeAsync((clock) {
+      final pending = Completer<BiliBiliDanmakuArgs?>();
+      var refreshes = 0;
+      final channels = <_Channel>[];
+      final engine = BiliBiliDanmaku(
+        connector: (_, {connectTimeout, protocols, headers}) {
+          final channel = _Channel();
+          channels.add(channel);
+          return channel;
+        },
+      );
+      unawaited(
+        engine.start(
+          args(
+            token: '',
+            refresh: () {
+              refreshes++;
+              return pending.future;
+            },
+          ),
+        ),
+      );
+      clock.flushMicrotasks();
+      clock.elapse(const Duration(seconds: 12));
+      clock.elapse(const Duration(seconds: 3));
+      pending.complete(args(token: 'late-valid'));
+      clock.flushMicrotasks();
+      clock.elapse(const Duration(seconds: 12));
+      expect(refreshes, 1);
+      expect(channels, hasLength(1));
+      expect(_join(channels.single)['key'], 'late-valid');
+      channels.single.input.add(packet({'code': 0}, 8));
+      clock.flushMicrotasks();
+      expect(engine.isConnected, isTrue);
+      unawaited(engine.stop());
+      clock.flushMicrotasks();
+    });
+  });
+  test('verified expired login stops retries with actionable notice, without becoming anonymous', () {
+    fakeAsync((clock) {
+      var refreshes = 0;
+      final notices = <String>[];
+      final channel = _Channel();
+      final engine = BiliBiliDanmaku(connector: (_, {connectTimeout, protocols, headers}) => channel)
+        ..onClose = notices.add;
+      unawaited(
+        engine.start(
+          args(
+            refresh: () async {
+              refreshes++;
+              throw const BilibiliSessionExpired();
+            },
+          ),
+        ),
+      );
+      clock.flushMicrotasks();
+      channel.input.add(packet({'code': -101}, 8));
+      clock.flushMicrotasks();
+      expect(notices.last, contains('code=-101'));
+      clock.elapse(const Duration(seconds: 15));
+      expect(notices.last, contains('重新登录'));
+      expect(notices.last, isNot(contains('正在尝试重连')));
+      clock.elapse(const Duration(minutes: 5));
+      expect(refreshes, 1);
+      expect(engine.isConnected, isFalse);
+      expect(engine.webScoketUtils, isNull);
+      unawaited(engine.stop());
+      clock.flushMicrotasks();
+    });
+  });
   test('initial empty credentials keep retrying beyond three failures then authenticate', () {
     fakeAsync((clock) {
       var refreshes = 0, ready = 0;
@@ -85,6 +157,7 @@ void main() {
       late Future<BiliBiliDanmakuArgs?> Function() refresh;
       refresh = () async {
         refreshes++;
+        if (refreshes == 1) throw TimeoutException('HTTP request timeout');
         if (refreshes <= 4) throw StateError('API unavailable');
         return args(token: 'fresh', refresh: refresh);
       };
