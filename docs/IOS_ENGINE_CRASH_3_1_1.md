@@ -50,3 +50,9 @@ Apple构建工作流加入同一工具测试，不能只靠Dart测试证明原�
 原Mac候选run `36327981449` 不含iOS补丁，将取消；最终交付改为iOS优先，
 之后Mac→Android→Windows→Linux串行。版本仍为未发布批次3.1.1+4114。
 3.1.0已发布资产不修改。没有安装/运行应用或操作设备。
+
+最终业务提交 `fdac378815c3231eb9d6e818efdf0308fbb5c7fc` 已快进推送master和
+`feat/platform-quality-login-20260926`。旧Mac run36327981449已取消；
+[iOS优先构建36330643128](https://github.com/shizuon/pure_live/actions/runs/36330643128)
+已启动完整质量检查、Apple工具测试和iOS编译，当前未完成IPA交付。
+自动化 `pure-live-3-1-1` 继续跟进iOS核验后其他平台，最终候选不混用旧Mac包。
