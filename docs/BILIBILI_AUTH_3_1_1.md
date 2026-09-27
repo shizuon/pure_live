@@ -87,3 +87,9 @@ AngelLive历史 `1f7a4bea` 的BilibiliCookieManager通过官方直播网页WebVi
   应用仅GitHub串行构建，Mac→Android→Windows→Linux→iOS，
   各端包核验后发布。Android正式密钥仍缺失时只给Actions临时测试APK；
   iOS普通未签名IPA由用户签名。不接触用户账号或设备。
+
+- 最终业务提交 `ee166c1da4e42e0cba573f94f80b9468f2d90711` 已快进推送
+  用户fork master和开发分支；[首轮Mac云构建36327981449](https://github.com/shizuon/pure_live/actions/runs/36327981449)
+  从此源码运行完整质量及Mac构建，尚未完成安装包验证或发布。
+- 当前线程低频任务 `pure-live-3-1-1` 每20分钟跟进失败修复、串行各平台构建、
+  下载核验、Release与索引闭环，全部完成才删除，不复用3.1.0旧产物。
