@@ -93,3 +93,20 @@ GitHub 文档说明这种提示可能来自平台控制的独立禁用状态，�
 进一步对斗鱼公共链路做一次分阶段检查：主站加密描述 GET 和 H5 取流 POST
 成功，失败出现在返回的视频 CDN TLS 握手。该探测不含账号凭据，不证明真实
 登录 Cookie 续期已完成，也不把这个网络结果与确定性状态机测试混为一谈。
+
+
+### 凭据复核与网页提示补充
+
+2026-11-02 11:42 UTC 重新核对实际请求：`GET /user` 返回 `shizuon`，
+仓库 `admin: true`，服务端返回令牌范围 `repo, workflow`（另有 gist/read:org）。
+环境没有 GH_TOKEN/GITHUB_TOKEN 覆盖，明确提取 shizuon 凭据并清空可能覆盖项后，
+直接 POST workflow dispatch 仍返回相同 HTTP 422。不能将此次失败归为账号用错
+或缺少 workflow scope。
+
+随后实际打开仓库 [Actions 页面](https://github.com/shizuon/pure_live/actions)，
+页面说明：此 fork 的工作流因 GitHub Actions 用量规模被暂停，维护者可以重新启用。
+这比先前 API 的泛化错误更具体。工作流 enable 与重新提交原有仓库 Actions
+permissions 都未消除该提示；后者前后仍为 enabled=true/allowed_actions=all，
+没有扩大权限。下一步应由已登录的仓库维护者通过网页的重新启用入口恢复，
+不需要先换令牌或修改付费预算。若网页恢复也失败，再依据实际提示联系支持。
+当前自动化浏览器未登录，尚未完成这项网页操作，也没有新构建 Run。
