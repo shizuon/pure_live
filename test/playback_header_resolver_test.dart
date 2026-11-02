@@ -1,8 +1,26 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pure_live/core/site/huya/huya_site.dart';
 import 'package:pure_live/player/core/playback_header_resolver.dart';
 import 'package:pure_live/recorder/services/ffmpeg_header_factory.dart';
 
 void main() {
+  test('Huya cold-start playback and recording share the same media headers', () async {
+    final previous = HuyaSite.playUserAgent;
+    addTearDown(() => HuyaSite.playUserAgent = previous);
+    HuyaSite.playUserAgent = null;
+
+    final playback = await PlaybackHeaderResolver.resolve(platform: 'huya', roomId: '10188');
+    final recording = await FFmpegHeaderFactory.build(platform: 'huya', roomId: '10188');
+
+    expect(playback, recording);
+    expect(playback['user-agent'], HuyaSite.fallbackPlayUserAgent);
+    expect(playback['origin'], 'https://www.huya.com');
+    expect(playback['referer'], 'https://www.huya.com/10188');
+    HuyaSite.playUserAgent = HuyaSite.huyaSdkUa;
+    final configured = await PlaybackHeaderResolver.resolve(platform: 'huya', roomId: '10188');
+    expect(configured['user-agent'], HuyaSite.huyaSdkUa);
+  });
+
   test('Douyu playback and recording share room-scoped anti-hotlink headers', () async {
     final playback = await PlaybackHeaderResolver.resolve(platform: 'DOUYU', roomId: '12345');
     final recording = await FFmpegHeaderFactory.build(platform: 'douyu', roomId: '12345');

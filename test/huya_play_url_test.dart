@@ -116,7 +116,7 @@ void main() {
     expect(qualities.single.selectionId, 0);
   });
 
-  test('Huya prefers a fresh WUP token and caches concurrent line resolution', () async {
+  test('Huya shares fresh WUP credentials between FLV lines and isolates HLS credentials', () async {
     var requests = 0;
     final site = HuyaSite(
       tokenLoader: (_) async {
@@ -127,6 +127,7 @@ void main() {
 
     final urls = await Future.wait([
       site.getPlayUrl(line(HuyaLineType.flv, 'http://al.flv.huya.com/src'), 8000),
+      site.getPlayUrl(line(HuyaLineType.flv, 'http://tx.flv.huya.com/src'), 2000),
       site.getPlayUrl(line(HuyaLineType.hls, 'http://al.hls.huya.com/src'), 2000),
     ]);
 
@@ -134,7 +135,28 @@ void main() {
     expect(urls[0], contains('wsSecret=fresh-token'));
     expect(urls[0], contains('&codec=265'));
     expect(urls[0], endsWith('&ratio=8000'));
-    expect(urls[1], startsWith('https://al.hls.huya.com/src/stream-name.m3u8?'));
+    expect(urls[1], contains('wsSecret=fresh-token'));
+    expect(urls[2], startsWith('https://al.hls.huya.com/src/stream-name.m3u8?'));
+    expect(Uri.parse(urls[2]).queryParameters['wsSecret'], 'hls-token');
+    expect(Uri.parse(urls[2]).queryParameters['codec'], '264');
+  });
+
+  test('Huya never requests an FLV-only WUP token for an HLS line', () async {
+    var requests = 0;
+    final site = HuyaSite(
+      tokenLoader: (_) async {
+        requests++;
+        return 'wsSecret=flv-only-token';
+      },
+    );
+
+    final url = await site.getPlayUrl(line(HuyaLineType.hls, 'http://al.hls.huya.com/src'), 500);
+    expect(Uri.parse(url).queryParameters['wsSecret'], 'hls-token');
+    await expectLater(
+      site.getPlayUrl(line(HuyaLineType.hls, 'http://al.hls.huya.com/src', hlsAntiCode: ''), 500),
+      throwsStateError,
+    );
+    expect(requests, 0);
   });
 
   test('Huya expires its fresh token cache after two minutes', () async {
@@ -166,12 +188,12 @@ void main() {
     expect(requests, 1);
   });
 
-  test('Huya preserves a captured page signature when WUP is unavailable', () async {
+  test('Huya preserves an opaque page signature when WUP is unavailable', () async {
     final site = HuyaSite(tokenLoader: (_) async => throw const SocketException('offline'));
     final source = line(
       HuyaLineType.flv,
       'http://al.flv.huya.com/src',
-      flvAntiCode: 'wsSecret=page-secret&wsTime=12345678&fm=YWJjX2RlZg%3D%3D&ctype=huya_live&t=100&fs=bgct',
+      flvAntiCode: 'wsSecret=page-secret&wsTime=12345678&ctype=huya_live&t=100&fs=bgct',
     );
 
     final url = await site.getPlayUrl(source, 8000);
@@ -180,5 +202,67 @@ void main() {
     expect(url, contains('wsTime=12345678'));
     expect(url, isNot(contains('seqid=')));
     expect(url, endsWith('&codec=264&ratio=8000'));
+  });
+
+  test('Huya requests fresh WUP credentials over HTTPS with a bounded connection timeout', () {
+    final site = HuyaSite();
+
+    expect(site.tupClient.baseUrl, 'https://wup.huya.com');
+    expect(site.tupClient.dio.options.connectTimeout, const Duration(seconds: 2));
+    site.tupClient.dio.close(force: true);
+  });
+
+  test('Huya signs each protocol page template when fresh WUP is unavailable', () async {
+    final now = DateTime.utc(2026, 11, 2, 12);
+    final site = HuyaSite(now: () => now, tokenLoader: (_) async => throw const SocketException('WUP refused'));
+    const flvTemplate =
+        'wsSecret=page-flv&wsTime=6ae88248&fm=Zmx2LXByZWZpeF8kMF8kMV8kMl8kMw%3D%3D&ctype=huya_live&fs=bgct';
+    const hlsTemplate =
+        'wsSecret=page-hls&wsTime=6ae88248&fm=aGxzLXByZWZpeF8kMF8kMV8kMl8kMw%3D%3D&ctype=huya_live&fs=bgct';
+
+    final flv = Uri.parse(
+      await site.getPlayUrl(line(HuyaLineType.flv, 'http://al.flv.huya.com/src', flvAntiCode: flvTemplate), 500),
+    );
+    final hls = Uri.parse(
+      await site.getPlayUrl(line(HuyaLineType.hls, 'http://al.hls.huya.com/src', hlsAntiCode: hlsTemplate), 500),
+    );
+
+    expect(flv.queryParameters['seqid'], '1793620800123');
+    expect(flv.queryParameters['u'], '31488');
+    expect(flv.queryParameters['t'], '100');
+    expect(flv.queryParameters['wsTime'], '6ae88248');
+    expect(flv.queryParameters['wsSecret'], '20afcb331379b4b18f8d940882e01330');
+    expect(hls.queryParameters['wsSecret'], '4ba149a745cd4ef1cb58c2d21b1dbaa8');
+    expect(hls.queryParameters['ctype'], 'huya_live');
+    expect(hls.queryParameters['ratio'], '500');
+    expect(hls.path, endsWith('.m3u8'));
+  });
+
+  test('Huya renews an expired HLS page template instead of replaying its captured signature', () async {
+    final now = DateTime.utc(2026, 11, 2, 12, 40);
+    var requests = 0;
+    final site = HuyaSite(
+      now: () => now,
+      tokenLoader: (_) async {
+        requests++;
+        throw const SocketException('FLV-only endpoint');
+      },
+    );
+    final url = Uri.parse(
+      await site.getPlayUrl(
+        line(
+          HuyaLineType.hls,
+          'https://al.hls.huya.com/src',
+          hlsAntiCode:
+              'wsSecret=expired-page&wsTime=6ae88248&fm=aGxzLXByZWZpeF8kMF8kMV8kMl8kMw%3D%3D&ctype=huya_live&fs=bgct',
+        ),
+        500,
+      ),
+    );
+
+    expect(requests, 0);
+    expect(url.queryParameters['wsSecret'], isNot('expired-page'));
+    expect(url.queryParameters['seqid'], isNotNull);
+    expect(int.parse(url.queryParameters['wsTime']!, radix: 16), greaterThan(now.millisecondsSinceEpoch ~/ 1000));
   });
 }

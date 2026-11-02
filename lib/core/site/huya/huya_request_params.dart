@@ -1,6 +1,6 @@
 mixin HuyaRequestParams {
   static const String baseUrl = "https://www.huya.com";
-  static const String wupUrl = "http://wup.huya.com";
+  static const String wupUrl = "https://wup.huya.com";
 
   static const String kUserAgent =
       "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36 Edg/117.0.0.0";
