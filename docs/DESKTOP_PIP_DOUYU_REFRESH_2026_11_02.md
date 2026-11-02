@@ -70,3 +70,26 @@ Android / iOS / Linux 的平台更新元数据保持已有版本，不把桌面�
   探测遇 TLS 握手失败，CC 分类返回 HTML；探测脚本与基线一致，未使用真实
   登录会话，不据此推定 Cookie 续期失败或声称真实取流全通过。本批继续桌面
   预发布构建，保留外部链路证据缺口。
+
+
+## 云构建受阻（2026-11-02）
+
+源码已推送 `master` 与 `feat/desktop-pip-douyu-refresh-20261102`，首次候选提交
+`e18074c`。两次 Mac workflow_dispatch 均在创建 Run 前被 GitHub 拒绝：
+`HTTP 422: Actions has been disabled for this repository.`
+
+只读核对显示仓库未归档、未禁用，Actions permissions 为 `enabled: true`，
+`feature-build.yml` 为 `active`。对该工作流调用 enable 返回成功后重试仍为 422。
+没有构建 Run、没有新安装包、没有创建 3.1.2 Release，也没有更改账户计费设置。
+GitHub 文档说明这种提示可能来自平台控制的独立禁用状态，需要联系支持审查；
+现有 API 证据不足以判断具体原因，不把它归因于余额或账号违规。
+
+[GitHub 官方说明](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository)。
+
+应用更新清单 `assets/version.json` 暂时保持之前的已存在状态，避免把未产出的
+3.1.2 安装包当作可下载更新。源码候选仍为 `3.1.2+4115`；实际构建/发布恢复时
+再同步本次交付的平台条目。当前未改动历史 Release 与 `assets/releases.json`。
+
+进一步对斗鱼公共链路做一次分阶段检查：主站加密描述 GET 和 H5 取流 POST
+成功，失败出现在返回的视频 CDN TLS 握手。该探测不含账号凭据，不证明真实
+登录 Cookie 续期已完成，也不把这个网络结果与确定性状态机测试混为一谈。

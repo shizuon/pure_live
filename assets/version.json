@@ -1,13 +1,11 @@
 {
-  "version": "3.1.2",
-  "build_number": 4115,
-  "version_num": 301024115,
-  "android_abis": [
-    "arm64-v8a"
-  ],
-  "version_desc": "3.1.2：Windows/macOS 小窗播放与弹幕叠加，斗鱼每次启动后台续期登录 Cookie。平台交付状态见版本说明。",
+  "version": "3.1.1",
+  "build_number": 4114,
+  "version_num": 301014114,
+  "android_abis": ["arm64-v8a"],
+  "version_desc": "3.1.1：修订B站登录态弹幕WBI密钥刷新、迟到凭据、登录失效提示及设备标识补全；精简退役测试。真实账号与各平台构建状态见交付记录。",
   "prerelease": true,
-  "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.2",
+  "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
   "platforms": {
     "android": {
       "version": "3.1.1",
@@ -16,17 +14,15 @@
       "version_desc": "3.1.1 Android arm64候选；B站凭据恢复修订。无正式密钥时仅提供测试APK；构建和设备测试以记录为准。",
       "prerelease": true,
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
-      "android_abis": [
-        "arm64-v8a"
-      ]
+      "android_abis": ["arm64-v8a"]
     },
     "windows": {
-      "version": "3.1.2",
-      "build_number": 4115,
-      "version_num": 301024115,
-      "version_desc": "3.1.2 Windows x64：置顶小窗、弹幕开关、恢复原窗口；斗鱼启动后台续期。真实账号与系统运行以验证记录为准。",
+      "version": "3.1.1",
+      "build_number": 4114,
+      "version_num": 301014114,
+      "version_desc": "3.1.1 Windows x64候选；B站凭据恢复修订，网页登录需WebView2。构建和设备测试以记录为准。",
       "prerelease": true,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.2",
+      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
       "windows_msix_available": false
     },
     "linux": {
@@ -38,12 +34,12 @@
       "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },
     "macos": {
-      "version": "3.1.2",
-      "build_number": 4115,
-      "version_num": 301024115,
-      "version_desc": "3.1.2 Mac Universal：置顶小窗、弹幕开关、恢复原窗口；斗鱼启动后台续期。真实账号与系统运行以验证记录为准。",
+      "version": "3.1.1",
+      "build_number": 4114,
+      "version_num": 301014114,
+      "version_desc": "3.1.1 Mac Universal候选；B站凭据恢复修订，保留双流、校准和硬解。构建和真实账号测试以记录为准。",
       "prerelease": true,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.2"
+      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },
     "ios": {
       "version": "3.1.1",
