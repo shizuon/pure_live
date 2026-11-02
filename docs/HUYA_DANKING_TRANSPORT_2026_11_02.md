@@ -87,3 +87,11 @@ python3 local-artifacts/run_guard.py huya-focused-and-production \
 本次不启动应用、不连接设备、不安装软件、不触发应用构建或发布。未采集 Windows/macOS/Android/iOS 解码画面、原始播放器 exception 或高码率 30M 播放；公开的低码率媒体读取不能替代这些证据。源码与取流结论应由父任务整合后进入正式质量门和既定平台交付，不宣称真实客户端已验收。
 
 回滚本次定向提交即可恢复原取流策略；无设置或数据迁移。回滚会同时恢复已经复现的 HTTP WUP 和未签名模板后备缺陷。
+
+
+## 整合后的最终质量门
+
+父任务已在干净提交 `a8c4ae98683e7c343c87d4a7fbdf6213d5d71a1d`
+完成静态分析（0 error、0 warning，2 条既有风格 info）及完整 **657/657**
+Flutter 回归。该版本同时包含本轮桌面小窗和斗鱼续期功能；后续安装包与发布
+状态以 [桌面交付记录](DESKTOP_PIP_DOUYU_REFRESH_2026_11_02.md) 为准。
