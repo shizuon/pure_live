@@ -304,8 +304,9 @@ void main() {
     Offset? hit;
     for (var y = 0; y < 48 && hit == null; y += 2) {
       for (var x = 0; x < 400 && hit == null; x += 2) {
-        if (controller.actionAt(x.toDouble(), y.toDouble(), longPress: false) != null)
+        if (controller.actionAt(x.toDouble(), y.toDouble(), longPress: false) != null) {
           hit = Offset(x.toDouble(), y.toDouble());
+        }
       }
     }
     expect(hit, isNotNull);
