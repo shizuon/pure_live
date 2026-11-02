@@ -2,7 +2,7 @@
 
 源码候选 `3.1.2+4115`，目标为 Windows x64 与 macOS Universal。
 
-**当前未发布安装包：GitHub Actions 调度返回 HTTP 422，尚未生成构建 Run。**
+用户已在 GitHub 页面重新启用 Actions，当前恢复 Mac → Windows 串行云构建；安装包以正式上传的附件为准。
 
 - 播放界面的小窗按钮支持 Windows / Mac；保留视频、当前弹幕及双流解说。
 - 小窗可置顶、拖动、缩放；鼠标移入显示播放、弹幕和返回按钮，双击或 Esc 返回，空格暂停/播放。
