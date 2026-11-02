@@ -117,3 +117,16 @@ permissions 都未消除该提示；后者前后仍为 enabled=true/allowed_acti
 用户已确认在网页完成重新启用，继续本轮 Mac → Windows 云构建。
 候选分支恢复 3.1.2 桌面版本清单，业务代码与已通过 652 项回归的提交一致；
 暂不将该清单推送 master，等对应安装包真正发布后再同步更新公告。
+
+
+### 恢复后的运行机容量问题
+
+Mac Run [41439471208](https://github.com/shizuon/pure_live/actions/runs/41439471208)
+成功创建，但等待约 15 分钟后由 GitHub 结束，未执行任何构建步骤。
+Check annotation 明确报告 hosted runner 多次领取失败，以及 macOS arm64
+运行机容量不足；这与此前 fork 禁用状态不同。
+
+将 Apple job 改为官方支持的 `macos-15-intel`，仍使用 macOS 15 / Xcode 26
+和 Flutter 3.47.0；安装包继续要求 `x86_64`、`arm64` 两种架构。
+业务源码和依赖未改动，复用 `e4bdbf1` 的完整 652 项回归；重新进行目标平台
+构建和产物核验，不把更换运行机当作已成功打包。

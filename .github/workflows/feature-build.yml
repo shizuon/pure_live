@@ -998,7 +998,8 @@ jobs:
 
     needs: [quality, linux]
 
-    runs-on: macos-15
+    # Intel hosted capacity; macOS output must still contain x86_64 and arm64.
+    runs-on: macos-15-intel
 
     timeout-minutes: 90
 
