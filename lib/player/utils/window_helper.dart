@@ -66,7 +66,7 @@ class WindowHelper {
   WindowHelper._internal() : _macos = Platform.isMacOS, _supported = PlatformUtils.supportsDesktopPip;
 
   @visibleForTesting
-  WindowHelper.forTesting({bool macos = false}) : _macos = macos, _supported = true;
+  WindowHelper.forTesting([this._macos = false]) : _supported = true;
 
   final bool _macos, _supported;
 

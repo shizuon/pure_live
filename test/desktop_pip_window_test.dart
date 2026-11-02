@@ -119,7 +119,7 @@ void main() {
 
   for (final macos in [false, true]) {
     test('${macos ? 'Mac' : 'Windows'} mini player restores geometry, stacking and native chrome', () async {
-      final helper = WindowHelper.forTesting(macos: macos);
+      final helper = WindowHelper.forTesting(macos);
       await helper.enterPiP(16 / 9);
       expect(helper.currentMode, WindowLayoutMode.pip);
       expect(alwaysOnTop, isTrue);
@@ -166,7 +166,7 @@ void main() {
   });
 
   test('a native entry failure rolls back size, chrome and topmost state', () async {
-    final helper = WindowHelper.forTesting(macos: true);
+    final helper = WindowHelper.forTesting(true);
     failNextBounds = true;
     await expectLater(helper.enterPiP(16 / 9), throwsA(isA<PlatformException>()));
     expect(bounds, normalBounds);
