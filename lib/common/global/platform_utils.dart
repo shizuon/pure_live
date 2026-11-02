@@ -1,9 +1,12 @@
 import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 
 class PlatformUtils {
   PlatformUtils._();
   static bool get isDesktop => Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+
+  static bool get supportsDesktopPip => Platform.isWindows || Platform.isMacOS;
 
   static bool get isDesktopNotMac => (Platform.isWindows || Platform.isLinux) && !Platform.isMacOS;
 

@@ -1,4 +1,5 @@
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:pure_live/core/site/douyu/douyu_cookie_refresh.dart';
 
 import 'platform_login_profile.dart';
 
@@ -10,6 +11,7 @@ class PlatformWebSession {
     final fields = <String, String>{};
     for (final url in profile.cookieUrls) {
       for (final cookie in await CookieManager.instance().getCookies(url: WebUri(url))) {
+        if (profile.id == 'douyu' && cookie.name == 'LTP0') continue;
         // Native implementations differ on expiry units; the cookie store
         // owns expiry. Explicitly filter domains because older plugins use a
         // suffix match rather than an exact domain boundary.
@@ -24,7 +26,11 @@ class PlatformWebSession {
   Future<void> clear() async {
     final manager = CookieManager.instance();
     final failures = <String>[];
-    for (final url in {...profile.cookieUrls, profile.loginUrl}) {
+    for (final url in {
+      ...profile.cookieUrls,
+      profile.loginUrl,
+      if (profile.id == 'douyu') DouyuCookieRefresher.safeAuthUrl.toString(),
+    }) {
       try {
         for (final cookie in await manager.getCookies(url: WebUri(url))) {
           if (cookie.domain != null && !profile.ownsDomain(cookie.domain)) continue;

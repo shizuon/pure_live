@@ -172,7 +172,7 @@ class VideoSettingsPage extends GetView<SettingsService> {
               value: SettingsService.to.player.floatPlay,
               icon: Remix.picture_in_picture_2_line,
             ),
-            if (Platform.isWindows)
+            if (Platform.isWindows || Platform.isMacOS)
               context.buildSwitchTile(
                 title: i18n('windows_pip_always_on_top'),
                 subtitle: i18n('windows_pip_always_on_top_subtitle'),
@@ -180,7 +180,7 @@ class VideoSettingsPage extends GetView<SettingsService> {
                 icon: Remix.pushpin_line,
                 onChanged: WindowHelper.instance.setPiPAlwaysOnTop,
               ),
-            if (Platform.isWindows)
+            if (Platform.isWindows || Platform.isMacOS)
               context.buildSwitchTile(
                 title: i18n('windows_pip_remember_position'),
                 subtitle: i18n('windows_pip_remember_position_subtitle'),
@@ -190,7 +190,7 @@ class VideoSettingsPage extends GetView<SettingsService> {
                   SettingsService.to.window.rememberPipPosition.v = value;
                 },
               ),
-            if (Platform.isWindows)
+            if (Platform.isWindows || Platform.isMacOS)
               context.buildTile(
                 icon: Remix.reserved_line,
                 title: i18n('windows_pip_reset_position'),

@@ -33,7 +33,7 @@ void main() {
       final config = PlayerSettingsController.extractConfig({'player': <String, dynamic>{}});
 
       expect(config['audioOnly'], isFalse);
-      expect(config['windowsPipAlwaysOnTop'], isFalse);
+      expect(config['windowsPipAlwaysOnTop'], isTrue);
     });
 
     test('preserves the Windows mini-player stacking preference', () {
@@ -42,6 +42,12 @@ void main() {
       });
 
       expect(config['windowsPipAlwaysOnTop'], isTrue);
+      expect(
+        PlayerSettingsController.extractConfig({
+          'player': {'windowsPipAlwaysOnTop': false},
+        })['windowsPipAlwaysOnTop'],
+        isFalse,
+      );
     });
 
     test('enables Windows mini-player geometry restore for old settings', () {

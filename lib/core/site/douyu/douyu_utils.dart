@@ -19,9 +19,18 @@ class DouyuUtils {
   static Map<String, dynamic> _encKey = <String, dynamic>{};
   static Future<void>? _encKeyRefresh;
   static int? _encKeyFetchedAtSeconds;
+  static String? _encKeyDeviceId;
   static final String _sessionDeviceId = generateDeviceId();
 
-  static String get deviceId => _sessionDeviceId;
+  static String get deviceId => douyuCookieDeviceId(_accountCookie, _sessionDeviceId);
+
+  static String get _accountCookie {
+    try {
+      return SettingsService.to.cookieManager.douyuCookie.value;
+    } catch (_) {
+      return '';
+    }
+  }
 
   static int _nowSeconds() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
@@ -46,6 +55,7 @@ class DouyuUtils {
   static bool _isCachedEncryptionKeyUsable(int nowSeconds) {
     final fetchedAt = _encKeyFetchedAtSeconds;
     return fetchedAt != null &&
+        _encKeyDeviceId == deviceId &&
         nowSeconds - fetchedAt < _maximumCacheAgeSeconds &&
         isEncryptionKeyUsable(_encKey, nowSeconds: nowSeconds);
   }
@@ -70,9 +80,10 @@ class DouyuUtils {
   }
 
   static Future<void> _fetchEncryptionKey() async {
+    final requestedDeviceId = deviceId;
     final response = await HttpClient.instance.getJson(
       _apiDouyuEnc,
-      queryParameters: {'did': deviceId},
+      queryParameters: {'did': requestedDeviceId},
       header: requestHeaders(),
     );
     final rawData = response is Map ? response['data'] : null;
@@ -84,6 +95,7 @@ class DouyuUtils {
       throw const FormatException('Douyu encryption descriptor is incomplete or expired');
     }
     _encKey = data;
+    _encKeyDeviceId = requestedDeviceId;
     _encKeyFetchedAtSeconds = _nowSeconds();
   }
 
@@ -113,13 +125,7 @@ class DouyuUtils {
   };
 
   static String cookieHeader() {
-    var accountCookie = '';
-    try {
-      accountCookie = SettingsService.to.cookieManager.douyuCookie.value;
-    } catch (_) {
-      // Offline callers and tests can resolve anonymous headers without GetX.
-    }
-    return buildDouyuCookieHeader(accountCookie, deviceId);
+    return buildDouyuCookieHeader(_accountCookie, deviceId);
   }
 
   /// Builds the form body from an already validated encryption descriptor.

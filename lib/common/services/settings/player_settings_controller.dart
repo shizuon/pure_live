@@ -52,7 +52,7 @@ class PlayerSettingsController extends GetxController {
 
   final RxBool floatPlay = hiveBool('floatPlay', false);
 
-  final RxBool windowsPipAlwaysOnTop = hiveBool('windowsPipAlwaysOnTop', false);
+  final RxBool windowsPipAlwaysOnTop = hiveBool('windowsPipAlwaysOnTop', true);
 
   final RxBool enableRtxVsr = hiveBool('enableRtxVsr', false);
 
@@ -210,7 +210,7 @@ class PlayerSettingsController extends GetxController {
 
     floatPlay.v = json['floatPlay'] ?? false;
 
-    windowsPipAlwaysOnTop.v = json['windowsPipAlwaysOnTop'] ?? false;
+    windowsPipAlwaysOnTop.v = json['windowsPipAlwaysOnTop'] ?? true;
 
     enableRtxVsr.v = json['enableRtxVsr'] ?? false;
 
@@ -270,7 +270,7 @@ class PlayerSettingsController extends GetxController {
 
       'floatPlay': player['floatPlay'] ?? false,
 
-      'windowsPipAlwaysOnTop': player['windowsPipAlwaysOnTop'] ?? false,
+      'windowsPipAlwaysOnTop': player['windowsPipAlwaysOnTop'] ?? true,
 
       'rememberPipPosition': player['rememberPipPosition'] ?? true,
 

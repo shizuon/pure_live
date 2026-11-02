@@ -9,7 +9,16 @@ class CookieSettingsController extends GetxController {
   final RxString huyaCookie = hiveString('huyaCookie', '');
   final RxString douyuCookie = hiveString('douyuCookie', '');
 
-  void setDouyuCookie(String value) => douyuCookie.value = normalizeDouyuCookie(value);
+  int _douyuSessionRevision = 0;
+  int get douyuSessionRevision => _douyuSessionRevision;
+
+  void setDouyuCookie(String value) {
+    // Count explicit writes even if the string is unchanged (A -> B -> A and
+    // clearing an already empty session must invalidate in-flight refreshes).
+    _douyuSessionRevision++;
+    douyuCookie.value = normalizeDouyuCookie(value);
+  }
+
   final RxString douyinCookie = hiveString('douyinCookie', '');
   final RxString kuaishouCookie = hiveString('kuaishouCookie', '');
   final RxString twitchCookie = hiveString('twitchCookie', '');
@@ -28,11 +37,18 @@ class CookieSettingsController extends GetxController {
     _ => throw ArgumentError.value(platform, 'platform'),
   };
 
-  void setAccountCookie(String platform, String value) => accountCookie(platform).value = normalizeDouyuCookie(value);
+  void setAccountCookie(String platform, String value) {
+    if (platform == 'douyu') {
+      setDouyuCookie(value);
+    } else {
+      accountCookie(platform).value = normalizeDouyuCookie(value);
+    }
+  }
+
   void clearAllCookies() {
     bilibiliCookie.v = '';
     huyaCookie.v = '';
-    douyuCookie.v = '';
+    setDouyuCookie('');
     douyinCookie.v = '';
     kuaishouCookie.v = '';
     twitchCookie.v = '';

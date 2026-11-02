@@ -26,6 +26,19 @@ void main() {
   });
   tearDown(Get.reset);
 
+  test('a failed native PiP restoration does not prevent decoder shutdown', () async {
+    final player = _Player();
+    final manager = _FailingPipManager(player)..configureDefaultEngine(PlayerEngine.mediaKit);
+    final room = LiveRoom(roomId: 'a', platform: 'douyu', status: true);
+    await manager.play('old', ['old'], {}, room: room, startMuted: true);
+    manager.isInPip.value = true;
+    await manager.close();
+    expect(player.disposed, isTrue);
+    expect(manager.currentPlayer, isNull);
+    expect(manager.isInPip.value, isFalse);
+    await manager.dispose();
+  });
+
   test('commentary uses MediaKit across reloads and restores the single-stream engine after release', () async {
     final created = <_Player>[];
     final manager = PlayerManager(
@@ -194,6 +207,24 @@ PlayerManager _manager(_Player player, _Refresher refresher) => PlayerManager(
   audioSessionStart: (_) async {},
   useHardStopOnExit: () => true,
 )..configureDefaultEngine(PlayerEngine.mediaKit);
+
+class _FailingPipManager extends PlayerManager {
+  _FailingPipManager(_Player player)
+    : super(
+        fallbackManager: EngineFallbackManager(
+          defaultEngine: PlayerEngine.mediaKit,
+          supportedEngines: [PlayerEngine.mediaKit],
+        ),
+        lineManager: LineFallbackManager(),
+        playerCreator: (_) => player,
+        audioModeServiceSync: (_, _) async {},
+        audioSessionStart: (_) async {},
+        useHardStopOnExit: () => true,
+      );
+
+  @override
+  Future<void> exitPip() async => throw StateError('fixture native transition failure');
+}
 
 RefreshedLiveSource _source(LiveRoom room) => RefreshedLiveSource(
   room: room,

@@ -42,7 +42,8 @@ void main() {
     final media = await PlaybackHeaderResolver.resolve(platform: 'douyu', roomId: '123');
     expect(media['cookie'], DouyuUtils.requestHeaders('123')['cookie']);
     expect(media['cookie'], contains('acf_auth=fixture'));
-    expect(media['cookie'], isNot(contains('dy_did=old')));
+    expect(media['cookie'], contains('dy_did=old'));
+    expect(DouyuUtils.deviceId, 'old');
     expect(await FFmpegHeaderFactory.build(platform: 'douyu', roomId: '123'), media);
     expect(BackupController.redactSensitiveData({'cookie': cookies.toJson()}), isNot(contains('cookie')));
     cookies.setDouyuCookie('');

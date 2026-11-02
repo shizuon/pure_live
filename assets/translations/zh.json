@@ -1400,7 +1400,7 @@
     "local_gift_soop_star_balloon": "星气球",
     "local_gift_soop_sticker": "贴纸",
     "local_gift_soop_signature_balloon": "签名气球",
-    "windows_pip_always_on_top": "Windows 小窗始终置顶",
+    "windows_pip_always_on_top": "桌面小窗始终置顶",
     "windows_pip_always_on_top_subtitle": "关闭后切换到其他应用时，小窗会按普通窗口层级被遮挡",
     "windows_pip_remember_position": "记住小窗位置和大小",
     "windows_pip_remember_position_subtitle": "下次进入小窗时恢复上次调整的尺寸与位置，并自动校正到当前可用显示器",
@@ -1540,5 +1540,14 @@
     "commentary_stop_recording_first": "请先停止当前录制，再开启双流解说",
     "commentary_sync_settings": "双流解说同步",
     "commentary_video": "画面",
-    "danmaku_connect_failed": "弹幕连接启动失败"
+    "danmaku_connect_failed": "弹幕连接启动失败",
+    "desktop_pip_restore": "返回完整窗口（双击画面也可返回）",
+    "desktop_pip_danmaku": "显示或隐藏小窗弹幕",
+    "douyu_refresh_startup_help": "每次打开应用后，会在后台自动更新斗鱼登录状态。",
+    "douyu_refresh_running": "正在后台更新斗鱼登录状态…",
+    "douyu_refresh_success": "斗鱼登录状态已更新。",
+    "douyu_refresh_login_required": "自动续期未成功，请重新登录斗鱼以恢复续期。",
+    "douyu_refresh_unavailable": "请在应用内登录斗鱼一次，以启用自动续期。仅粘贴 Cookie 无法保证续期。",
+    "douyu_refresh_failed": "暂时无法更新，已保留现有登录信息，可稍后重试。",
+    "douyu_refresh_now": "立即更新登录状态"
 }

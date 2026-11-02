@@ -53,6 +53,7 @@ List<TopActionTrailingSlot> resolveTopActionTrailingSlots({
   required bool fullscreen,
   required bool android,
   required bool windows,
+  bool macos = false,
   bool commentarySupported = false,
 }) {
   return <TopActionTrailingSlot>[
@@ -62,7 +63,7 @@ List<TopActionTrailingSlot> resolveTopActionTrailingSlots({
     TopActionTrailingSlot.audioOnly,
     if (commentarySupported) TopActionTrailingSlot.commentary,
     if (android) TopActionTrailingSlot.cast,
-    if (android || windows) TopActionTrailingSlot.pip,
+    if (android || windows || macos) TopActionTrailingSlot.pip,
   ];
 }
 
@@ -335,6 +336,7 @@ class TopActionBar extends StatelessWidget {
                 fullscreen: GlobalPlayerState.to.fullscreenUI,
                 android: PlatformUtils.isAndroid,
                 windows: PlatformUtils.isWindows,
+                macos: PlatformUtils.isMacOS,
                 commentarySupported: CommentaryPlatformSupport.isSupported,
               ))
                 switch (slot) {

@@ -17,9 +17,22 @@ String normalizeDouyuCookie(String value) {
 }
 
 String buildDouyuCookieHeader(String accountCookie, String deviceId) {
-  final fields = normalizeDouyuCookie(accountCookie).split('; ').where((field) {
-    final name = field.split('=').first.toLowerCase();
-    return field.isNotEmpty && name != 'dy_did' && name != 'acf_did';
-  });
-  return ['dy_did=$deviceId', 'acf_did=$deviceId', ...fields].join('; ');
+  final fields = douyuCookieFields(accountCookie)..remove('LTP0');
+  if (fields['dy_did']?.isNotEmpty != true) fields['dy_did'] = deviceId;
+  if (fields['acf_did']?.isNotEmpty != true) fields['acf_did'] = deviceId;
+  return fields.entries.map((e) => '${e.key}=${e.value}').join('; ');
+}
+
+Map<String, String> douyuCookieFields(String value) => {
+  for (final field in normalizeDouyuCookie(value).split('; '))
+    if (field.contains('=')) field.substring(0, field.indexOf('=')): field.substring(field.indexOf('=') + 1),
+};
+
+String douyuCookieDeviceId(String cookie, String fallback) {
+  final fields = douyuCookieFields(cookie);
+  for (final key in ['dy_did', 'acf_did']) {
+    final value = fields[key];
+    if (value != null && value.isNotEmpty) return value;
+  }
+  return fallback;
 }

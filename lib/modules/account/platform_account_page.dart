@@ -2,6 +2,7 @@ import 'package:pure_live/common/index.dart';
 import 'package:pure_live/common/global/platform_utils.dart';
 import 'package:pure_live/common/services/settings/cookie_settings_controller.dart';
 import 'package:pure_live/common/services/settings/bilibili_account_service.dart';
+import 'package:pure_live/common/services/douyu_account_refresh_service.dart';
 
 import 'platform_login_profile.dart';
 import 'platform_web_session.dart';
@@ -20,9 +21,23 @@ class _PlatformAccountPageState extends State<PlatformAccountPage> {
   late final _text = TextEditingController(text: _settings.accountCookie(widget.platform).value);
   bool _busy = false, _reveal = false;
   String? _message;
+  DouyuAccountRefreshService? get _douyuRefresh =>
+      widget.platform == 'douyu' && Get.isRegistered<DouyuAccountRefreshService>()
+      ? Get.find<DouyuAccountRefreshService>()
+      : null;
+
   Future<void> _login() async {
     setState(() => _busy = true);
     try {
+      final refresh = _douyuRefresh;
+      final needsNewLogin = refresh?.status.value == DouyuRefreshStatus.loginRequired;
+      await refresh?.cancelAndWait();
+      if (needsNewLogin) {
+        // Cookie presence is not authentication. Do not immediately capture
+        // and close on the same revoked session when the user signs in again.
+        await PlatformWebSession(_profile).clear();
+      }
+      if (!mounted) return;
       final saved = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => PlatformWebLoginPage(
@@ -35,12 +50,14 @@ class _PlatformAccountPageState extends State<PlatformAccountPage> {
         _text.text = _settings.accountCookie(widget.platform).value;
         if (saved == true) _message = i18n('platform_login_saved');
       }
+    } catch (_) {
+      if (mounted) _message = i18n('platform_login_read_failed');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _logout() async {
+  Future<bool> _logout() async {
     setState(() => _busy = true);
     _settings.setAccountCookie(widget.platform, '');
     if (widget.platform == 'bilibili' && Get.isRegistered<BiliBiliAccountService>()) {
@@ -48,18 +65,34 @@ class _PlatformAccountPageState extends State<PlatformAccountPage> {
     }
     _text.clear();
     try {
+      await _douyuRefresh?.cancelAndWait();
       if (!PlatformUtils.isLinux) await PlatformWebSession(_profile).clear();
       _message = i18n('platform_logged_out');
+      return true;
     } catch (_) {
       _message = i18n('platform_logout_web_failed');
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _switchAccount() async {
-    await _logout();
-    if (mounted) await _login();
+    final cleared = await _logout();
+    if (cleared && mounted) await _login();
+  }
+
+  Future<void> _saveCookie() async {
+    setState(() => _busy = true);
+    try {
+      await _douyuRefresh?.cancelAndWait();
+      if (!mounted) return;
+      _settings.setAccountCookie(widget.platform, _text.text);
+      _text.text = _settings.accountCookie(widget.platform).value;
+      _message = i18n('platform_login_saved');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -83,6 +116,34 @@ class _PlatformAccountPageState extends State<PlatformAccountPage> {
                 : i18n('platform_session_saved'),
           ),
         ),
+        if (_douyuRefresh case final refresh?) ...[
+          const SizedBox(height: 8),
+          Obx(
+            () => Text(
+              i18n(switch (refresh.status.value) {
+                DouyuRefreshStatus.idle => 'douyu_refresh_startup_help',
+                DouyuRefreshStatus.refreshing => 'douyu_refresh_running',
+                DouyuRefreshStatus.refreshed => 'douyu_refresh_success',
+                DouyuRefreshStatus.loginRequired => 'douyu_refresh_login_required',
+                DouyuRefreshStatus.unavailable => 'douyu_refresh_unavailable',
+                DouyuRefreshStatus.failed => 'douyu_refresh_failed',
+              }),
+            ),
+          ),
+          if (!PlatformUtils.isLinux)
+            Obx(
+              () => TextButton.icon(
+                onPressed: _busy || refresh.status.value == DouyuRefreshStatus.refreshing
+                    ? null
+                    : () async {
+                        await refresh.refresh();
+                        if (mounted) _text.text = _settings.accountCookie(widget.platform).value;
+                      },
+                icon: const Icon(Icons.refresh),
+                label: Text(i18n('douyu_refresh_now')),
+              ),
+            ),
+        ],
         if (widget.platform == 'bilibili')
           FilledButton.icon(
             onPressed: _busy ? null : () => Get.toNamed(RoutePath.kBiliBiliQRLogin),
@@ -121,16 +182,7 @@ class _PlatformAccountPageState extends State<PlatformAccountPage> {
                 ),
               ),
             ),
-            FilledButton(
-              onPressed: _busy
-                  ? null
-                  : () {
-                      _settings.setAccountCookie(widget.platform, _text.text);
-                      _text.text = _settings.accountCookie(widget.platform).value;
-                      setState(() => _message = i18n('platform_login_saved'));
-                    },
-              child: Text(i18n('set')),
-            ),
+            FilledButton(onPressed: _busy ? null : _saveCookie, child: Text(i18n('set'))),
           ],
         ),
       ],

@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/player/utils/window_helper.dart';
+import 'package:pure_live/common/global/platform_utils.dart';
+import 'package:pure_live/player/utils/desktop_fullscreen_transition.dart';
 import 'package:pure_live/modules/live_play/controllers/player_state.dart';
 import 'package:pure_live/modules/live_play/controllers/live_play_controller.dart';
 
@@ -43,54 +45,47 @@ class WindowService {
     return supportsOrientationLockForLogicalDisplay(logicalSize);
   }
 
-  Future<void> enterWinPiP(double videoRatio) async {
-    if (!Platform.isWindows) return;
+  bool _nativeFullscreenBeforePip = false;
+
+  Future<void> enterDesktopPiP(double videoRatio) async {
+    if (!PlatformUtils.supportsDesktopPip || WindowHelper.instance.currentMode == WindowLayoutMode.pip) return;
     final state = GlobalPlayerState.to;
     _presentationBeforePip = WindowPresentationSnapshot.capture(state);
-    if (state.isFullscreen.value && Get.isRegistered<LivePlayController>()) {
-      final livePlayController = Get.find<LivePlayController>();
-      final videoController = livePlayController.state.value.player.videoController;
-      await videoController?.toggleFullScreen();
+    _nativeFullscreenBeforePip = await windowManager.isFullScreen();
+    try {
+      if (_nativeFullscreenBeforePip) await doExitWindowFullScreen();
+      await WindowHelper.instance.enterPiP(videoRatio);
+    } catch (_) {
+      await _restorePresentation();
+      rethrow;
     }
-    await WindowHelper.instance.enterPiP(videoRatio);
   }
 
-  Future<void> exitWinPiP() async {
-    if (!Platform.isWindows) return;
+  Future<void> exitDesktopPiP() async {
+    if (!PlatformUtils.supportsDesktopPip) return;
     await WindowHelper.instance.exitPiP();
+    await _restorePresentation();
+  }
 
+  Future<void> _restorePresentation() async {
     final state = GlobalPlayerState.to;
-    final presentation = _presentationBeforePip ?? WindowPresentationSnapshot.capture(state);
-    _presentationBeforePip = null;
-    state.isPipMode.value = false;
-
-    if (!Get.isRegistered<LivePlayController>()) {
-      state.isFullscreen.value = presentation.fullscreen;
-      state.isWindowFullscreen.value = !presentation.fullscreen && presentation.widescreen;
-      return;
-    }
-
-    final livePlayController = Get.find<LivePlayController>();
-    if (presentation.fullscreen) {
-      state.isWindowFullscreen.value = false;
-      final videoController = livePlayController.state.value.player.videoController;
-      if (videoController != null && !state.isFullscreen.value) {
-        await videoController.toggleFullScreen();
+    final presentation = _presentationBeforePip;
+    if (presentation == null) return;
+    if (_nativeFullscreenBeforePip || presentation.fullscreen) await doEnterWindowFullScreen();
+    state.isFullscreen.value = presentation.fullscreen;
+    state.isWindowFullscreen.value = !presentation.fullscreen && presentation.widescreen;
+    if (Get.isRegistered<LivePlayController>()) {
+      final controller = Get.find<LivePlayController>();
+      if (presentation.fullscreen) {
+        controller.setFullScreen();
+      } else if (presentation.widescreen) {
+        controller.setWidescreen();
       } else {
-        livePlayController.setFullScreen();
-        state.isFullscreen.value = true;
+        controller.setNormalScreen();
       }
-      return;
     }
-
-    state.isFullscreen.value = false;
-    if (presentation.widescreen) {
-      livePlayController.setWidescreen();
-      state.isWindowFullscreen.value = true;
-    } else {
-      livePlayController.setNormalScreen();
-      state.isWindowFullscreen.value = false;
-    }
+    _presentationBeforePip = null;
+    _nativeFullscreenBeforePip = false;
   }
 
   //横屏
@@ -157,13 +152,13 @@ class WindowService {
 
   Future<void> doExitWindowFullScreen() async {
     if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
-      await windowManager.setFullScreen(false);
+      await setDesktopFullScreen(false, waitForEvent: Platform.isMacOS);
     }
   }
 
   Future<void> doEnterWindowFullScreen({bool enableEscListener = true, VoidCallback? onEsc}) async {
     if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
-      await windowManager.setFullScreen(true);
+      await setDesktopFullScreen(true, waitForEvent: Platform.isMacOS);
     }
   }
 }

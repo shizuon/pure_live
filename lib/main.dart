@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:ui' show AppExitResponse;
 
 import 'package:pure_live/common/services/desktop_shutdown.dart';
+import 'package:pure_live/common/services/douyu_account_refresh_service.dart';
 import 'package:pure_live/plugins/db_service.dart';
 import 'package:pure_live/common/utils/hive_pref_util.dart';
 
@@ -52,6 +53,7 @@ class _MyAppState extends State<MyApp> with DesktopWindowMixin {
   StreamSubscription<SharedMedia>? _sharedMediaSubscription;
   AppLifecycleListener? _exitListener;
   bool _shuttingDown = false;
+  DouyuAccountRefreshService? _douyuRefresh;
   late final _shutdown = DesktopShutdown(
     detachViews: () async {
       if (mounted) {
@@ -62,6 +64,7 @@ class _MyAppState extends State<MyApp> with DesktopWindowMixin {
       }
     },
     closeResources: () async {
+      await _douyuRefresh?.cancelAndWait();
       await GlobalPlayerService.instance.dispose();
       if (Get.isRegistered<DbService>()) await Get.find<DbService>().close();
       await HivePrefUtil.flush();
@@ -78,6 +81,10 @@ class _MyAppState extends State<MyApp> with DesktopWindowMixin {
     // settled room snapshot as one transaction, so cards do not reshuffle as
     // individual requests finish.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !PlatformUtils.isLinux && Get.isRegistered<DouyuAccountRefreshService>()) {
+        _douyuRefresh = Get.find<DouyuAccountRefreshService>();
+        unawaited(_douyuRefresh!.refreshOnStartup());
+      }
       if (mounted && Get.isRegistered<FavoriteController>()) {
         Get.find<FavoriteController>();
       }
@@ -120,6 +127,7 @@ class _MyAppState extends State<MyApp> with DesktopWindowMixin {
 
   @override
   void dispose() {
+    unawaited(_douyuRefresh?.cancelAndWait());
     _exitListener?.dispose();
     DesktopShutdown.beforeExit = null;
     if (PlatformUtils.isDesktop) {

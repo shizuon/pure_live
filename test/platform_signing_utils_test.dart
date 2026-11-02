@@ -55,7 +55,7 @@ void main() {
           'Cookie: acf_auth=abc==;\r\n acf_uid=123; dy_did=old; ACF_DID=other; broken; bad name=x',
           'session-device',
         ),
-        'dy_did=session-device; acf_did=session-device; acf_auth=abc==; acf_uid=123',
+        'acf_auth=abc==; acf_uid=123; dy_did=old; ACF_DID=other; acf_did=session-device',
       );
       expect(DouyuUtils.deviceId, matches(RegExp(r'^[0-9a-f]{32}$')));
 

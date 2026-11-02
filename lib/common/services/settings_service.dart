@@ -19,6 +19,9 @@ import 'package:pure_live/common/services/settings/proxy_settings_controller.dar
 import 'package:pure_live/common/services/settings/theme_settings_controller.dart';
 import 'package:pure_live/common/services/settings/player_settings_controller.dart';
 import 'package:pure_live/common/services/settings/cookie_settings_controller.dart';
+import 'package:pure_live/common/services/douyu_account_refresh_service.dart';
+import 'package:pure_live/core/site/douyu/douyu_cookie_refresh.dart';
+import 'package:pure_live/modules/account/douyu_refresh_store.dart';
 import 'package:pure_live/common/services/settings/volume_settings_controller.dart';
 import 'package:pure_live/common/services/settings/danmaku_settings_controller.dart';
 
@@ -67,6 +70,16 @@ class SettingsService extends GetxService {
     Get.lazyPut(FavoriteRoomController.new, fenix: true);
     Get.lazyPut(CacheController.new, fenix: true);
     Get.lazyPut(CookieSettingsController.new, fenix: true);
+    Get.lazyPut(
+      () => DouyuAccountRefreshService(
+        settings: cookieManager,
+        readCredential: DouyuRefreshStore.read,
+        exchange: (cookie, credential, cancelToken) =>
+            DouyuCookieRefresher().refresh(accountCookie: cookie, credential: credential, cancelToken: cancelToken),
+        writeNativeCookies: DouyuRefreshStore.write,
+      ),
+      fenix: true,
+    );
     Get.lazyPut(PageSettingsController.new, fenix: true);
     Get.lazyPut(WebDavController.new, fenix: true);
     Get.lazyPut(BackupController.new, fenix: true);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:pure_live/common/services/settings_service.dart';
+import 'package:pure_live/common/global/platform_utils.dart';
 
 enum WindowLayoutMode { normal, pip }
 
@@ -62,7 +63,12 @@ Rect resolveWindowsPipBounds({
 class WindowHelper {
   static final WindowHelper instance = WindowHelper._internal();
 
-  WindowHelper._internal();
+  WindowHelper._internal() : _macos = Platform.isMacOS, _supported = PlatformUtils.supportsDesktopPip;
+
+  @visibleForTesting
+  WindowHelper.forTesting({bool macos = false}) : _macos = macos, _supported = true;
+
+  final bool _macos, _supported;
 
   final Size defaultSize = const Size(1280, 720);
 
@@ -70,9 +76,28 @@ class WindowHelper {
 
   Size _savedSize = const Size(1280, 720);
   Offset _savedPosition = Offset.zero;
+  bool _savedAlwaysOnTop = false;
+  bool _savedMaximized = false;
+  bool _savedVisibleOnAllWorkspaces = false;
+  bool _hasSnapshot = false;
+  bool isTransitioning = false;
+  Future<void> _transition = Future.value();
+
+  Future<void> _serialize(Future<void> Function() change) {
+    final result = _transition.then((_) async {
+      isTransitioning = true;
+      try {
+        await change();
+      } finally {
+        isTransitioning = false;
+      }
+    });
+    _transition = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return result;
+  }
 
   Future<void> togglePiP(double videoRatio) async {
-    if (!Platform.isWindows) return;
+    if (!_supported) return;
 
     if (currentMode == WindowLayoutMode.normal) {
       await enterPiP(videoRatio);
@@ -81,11 +106,32 @@ class WindowHelper {
     }
   }
 
-  Future<void> enterPiP(double videoRatio) async {
-    currentMode = WindowLayoutMode.pip;
+  Future<void> enterPiP(double videoRatio) => _serialize(() async {
+    if (currentMode == WindowLayoutMode.pip) return;
+    try {
+      await _enterPiP(videoRatio);
+      currentMode = WindowLayoutMode.pip;
+    } catch (_) {
+      if (_hasSnapshot) await _restoreWindow();
+      rethrow;
+    }
+  });
+
+  Future<void> _enterPiP(double videoRatio) async {
+    _savedAlwaysOnTop = await windowManager.isAlwaysOnTop();
+    _savedMaximized = await windowManager.isMaximized();
+    if (_macos) {
+      _savedVisibleOnAllWorkspaces = await windowManager.isVisibleOnAllWorkspaces();
+    }
 
     _savedSize = await windowManager.getSize();
     _savedPosition = await windowManager.getPosition();
+    _hasSnapshot = true;
+    if (_savedMaximized) {
+      await windowManager.unmaximize();
+      _savedSize = await windowManager.getSize();
+      _savedPosition = await windowManager.getPosition();
+    }
 
     final displays = await screenRetriever.getAllDisplays();
     final primaryDisplay = await screenRetriever.getPrimaryDisplay();
@@ -172,7 +218,11 @@ class WindowHelper {
 
     await windowManager.setAlwaysOnTop(SettingsService.to.player.windowsPipAlwaysOnTop.value);
 
-    await windowManager.setMinimumSize(Size.zero);
+    if (_macos) {
+      await windowManager.setTitleBarStyle(TitleBarStyle.hidden, windowButtonVisibility: false);
+      await windowManager.setVisibleOnAllWorkspaces(true, visibleOnFullScreen: true);
+    }
+    await windowManager.setMinimumSize(const Size(140, 90));
 
     await windowManager.setSize(bounds.size);
     await windowManager.setPosition(bounds.topLeft);
@@ -188,19 +238,29 @@ class WindowHelper {
     }
   }
 
-  Future<void> exitPiP() async {
+  Future<void> exitPiP() => _serialize(() async {
+    if (!_hasSnapshot) return;
+    await _restoreWindow();
     currentMode = WindowLayoutMode.normal;
+  });
 
-    await windowManager.setAlwaysOnTop(false);
+  Future<void> _restoreWindow() async {
+    await windowManager.setAlwaysOnTop(_savedAlwaysOnTop);
 
-    await windowManager.setMinimumSize(const Size(800, 600));
+    if (_macos) {
+      await windowManager.setVisibleOnAllWorkspaces(_savedVisibleOnAllWorkspaces);
+      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+    }
+    await windowManager.setMinimumSize(const Size(400, 300));
 
     await windowManager.setSize(_savedSize);
     await windowManager.setPosition(_savedPosition);
+    if (_savedMaximized) await windowManager.maximize();
+    _hasSnapshot = false;
   }
 
   Future<void> setPiPAlwaysOnTop(bool value) async {
-    if (!Platform.isWindows || currentMode != WindowLayoutMode.pip) {
+    if (!_supported || currentMode != WindowLayoutMode.pip) {
       return;
     }
 
@@ -208,7 +268,7 @@ class WindowHelper {
   }
 
   Future<void> capturePiPGeometry({double? videoRatio}) async {
-    if (!Platform.isWindows || currentMode != WindowLayoutMode.pip) {
+    if (!_supported || isTransitioning || currentMode != WindowLayoutMode.pip) {
       return;
     }
 
@@ -224,6 +284,10 @@ class WindowHelper {
     final displays = await screenRetriever.getAllDisplays();
 
     final display = _findDisplayForPosition(displays, position) ?? await screenRetriever.getPrimaryDisplay();
+
+    // A move notification can finish after exit starts. Never persist the
+    // restored main-window rectangle as next time's compact bounds.
+    if (isTransitioning || currentMode != WindowLayoutMode.pip) return;
 
     final ratio = videoRatio != null && videoRatio.isFinite && videoRatio > 0 ? videoRatio : size.width / size.height;
 

@@ -1400,7 +1400,7 @@
     "local_gift_soop_star_balloon": "Star Balloon",
     "local_gift_soop_sticker": "Sticker",
     "local_gift_soop_signature_balloon": "Signature Balloon",
-    "windows_pip_always_on_top": "Keep Windows mini player on top",
+    "windows_pip_always_on_top": "Keep desktop mini player on top",
     "windows_pip_always_on_top_subtitle": "When off, other applications can cover the mini player",
     "windows_pip_remember_position": "Remember PiP position and size",
     "windows_pip_remember_position_subtitle": "Restore the last adjusted bounds and keep them visible on the available displays",
@@ -1540,5 +1540,14 @@
     "commentary_stop_recording_first": "Stop the current recording before starting dual-stream commentary.",
     "commentary_sync_settings": "Dual-stream commentary sync",
     "commentary_video": "Video",
-    "danmaku_connect_failed": "Could not start the danmaku connection"
+    "danmaku_connect_failed": "Could not start the danmaku connection",
+    "desktop_pip_restore": "Restore full window (or double-click the video)",
+    "desktop_pip_danmaku": "Show or hide mini player chat",
+    "douyu_refresh_startup_help": "Douyu sign-in refreshes in the background whenever the app starts.",
+    "douyu_refresh_running": "Refreshing Douyu sign-in in the background…",
+    "douyu_refresh_success": "Douyu sign-in refreshed.",
+    "douyu_refresh_login_required": "Automatic renewal did not succeed. Sign in to Douyu again to restore renewal.",
+    "douyu_refresh_unavailable": "Sign in to Douyu in the app once to enable renewal. A pasted Cookie alone may not support renewal.",
+    "douyu_refresh_failed": "Unable to refresh right now. Your existing session was kept; try again later.",
+    "douyu_refresh_now": "Refresh sign-in now"
 }

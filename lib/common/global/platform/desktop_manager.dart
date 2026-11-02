@@ -760,6 +760,7 @@ mixin DesktopWindowMixin<T extends StatefulWidget> on State<T>
   void handleStatusBarTap() {}
 
   void _updateWindowSizeToController() {
+    if (WindowHelper.instance.isTransitioning) return;
     if (WindowHelper.instance.currentMode == WindowLayoutMode.pip) {
       unawaited(
         WindowHelper.instance.capturePiPGeometry(videoRatio: GlobalPlayerService.instance.player.rawVideoAspectRatio),
@@ -767,7 +768,11 @@ mixin DesktopWindowMixin<T extends StatefulWidget> on State<T>
       return;
     }
 
-    windowManager.getSize().then(_sizeController.updateSize);
+    windowManager.getSize().then((size) {
+      if (!WindowHelper.instance.isTransitioning && WindowHelper.instance.currentMode == WindowLayoutMode.normal) {
+        _sizeController.updateSize(size);
+      }
+    });
   }
 
   void _scheduleWindowSizeUpdate() {

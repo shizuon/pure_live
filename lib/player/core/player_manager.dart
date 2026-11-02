@@ -12,6 +12,7 @@ import 'live_source_refresher.dart';
 
 import 'package:floating/floating.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import '../models/player_exception.dart';
 
@@ -33,6 +34,7 @@ import 'package:pure_live/player/utils/window_helper.dart';
 import 'package:pure_live/player/utils/player_consts.dart';
 import 'package:pure_live/common/global/platform_utils.dart';
 import 'package:pure_live/player/utils/pip_window_widget.dart';
+import 'package:pure_live/player/widgets/desktop_pip_controls.dart';
 import 'package:pure_live/player/core/live_audio_service.dart';
 import 'package:pure_live/player/core/live_audio_control_delegate.dart';
 import 'package:pure_live/player/adapters/media_kit_adapter.dart';
@@ -1073,9 +1075,18 @@ class PlayerManager {
         isPipPreparing.value = false;
         _pipTransitionInFlight = false;
       }
-    } else if (Platform.isWindows) {
-      await WindowService().enterWinPiP(rawVideoAspectRatio);
-      isInPip.value = true;
+    } else if (PlatformUtils.supportsDesktopPip) {
+      if (_disposed || _isClosing || isInPip.value || _desktopPipTransition != null || _desktopPipExit != null) return;
+      final transition = () async {
+        await WindowService().enterDesktopPiP(rawVideoAspectRatio);
+        isInPip.value = true;
+      }();
+      _desktopPipTransition = transition;
+      try {
+        await transition;
+      } finally {
+        _desktopPipTransition = null;
+      }
     }
   }
 
@@ -1104,10 +1115,32 @@ class PlayerManager {
     });
   }
 
-  Future<void> exitPip() async {
-    if (Platform.isWindows) {
-      await WindowService().exitWinPiP();
+  Future<void>? _desktopPipTransition;
+  Future<void>? _desktopPipExit;
+
+  Future<void> exitPip() {
+    if (!PlatformUtils.supportsDesktopPip) return Future.value();
+    if (_desktopPipExit != null) return _desktopPipExit!;
+    late final Future<void> exit;
+    exit = _exitDesktopPip().whenComplete(() {
+      if (identical(_desktopPipExit, exit)) _desktopPipExit = null;
+    });
+    _desktopPipExit = exit;
+    return exit;
+  }
+
+  Future<void> _exitDesktopPip() async {
+    await _desktopPipTransition;
+    if (!isInPip.value) return;
+    final transition = () async {
+      await WindowService().exitDesktopPiP();
       isInPip.value = false;
+    }();
+    _desktopPipTransition = transition;
+    try {
+      await transition;
+    } finally {
+      _desktopPipTransition = null;
     }
   }
 
@@ -1119,7 +1152,7 @@ class PlayerManager {
     isFloatingVideoVisible.value = true;
     floatingManager.disposeFloating(_floatTag);
     _hideTimer?.cancel();
-    double maxSide = Platform.isWindows ? 350 : 220;
+    double maxSide = PlatformUtils.supportsDesktopPip ? 350 : 220;
     final ratio = rawVideoAspectRatio;
     double floatWidth;
     double floatHeight;
@@ -1326,22 +1359,19 @@ class PlayerManager {
   }
 
   Widget buildPiPOverlay() {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: MouseRegion(
-        onEnter: (_) => isHovered.value = true,
-        onExit: (_) => isHovered.value = false,
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: const BoxDecoration(color: Colors.black),
+    final content = PureLivePipWidget(
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: MouseRegion(
+          onEnter: (_) => isHovered.value = true,
+          onExit: (_) => isHovered.value = false,
           child: Stack(
+            fit: StackFit.expand,
             children: [
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onPanStart: PlatformUtils.isDesktop ? (_) => windowManager.startDragging() : null,
-                onDoubleTap: () async {
-                  await exitPip();
-                },
+                onPanStart: PlatformUtils.supportsDesktopPip ? (_) => windowManager.startDragging() : null,
+                onDoubleTap: exitPip,
                 child: Obx(
                   () => getVideoWidget(
                     SettingsService.to.player.videoFitIndex.v,
@@ -1351,52 +1381,42 @@ class PlayerManager {
               ),
               Positioned.fill(child: _buildCompactDanmaku()),
               if (compactCommentaryBuilder != null) compactCommentaryBuilder!(),
-              Center(
-                child: Obx(
-                  () => AnimatedOpacity(
-                    opacity: isHovered.value ? 1 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: StreamBuilder<bool>(
-                      stream: sessionPlayingStream,
-                      initialData: sessionPlaying,
-                      builder: (context, snapshot) {
-                        var isPlay = snapshot.data ?? true;
-                        return IconButton(
-                          iconSize: 42,
-                          style: IconButton.styleFrom(backgroundColor: Colors.black45),
-                          icon: Icon(
-                            isPlay ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                            color: Colors.white,
-                          ),
-                          onPressed: () {
-                            togglePlayPause();
-                          },
-                        );
+              if (PlatformUtils.supportsDesktopPip)
+                StreamBuilder<bool>(
+                  stream: sessionPlayingStream,
+                  initialData: sessionPlaying,
+                  builder: (context, snapshot) => Obx(
+                    () => DesktopPipControls(
+                      visible: isHovered.value,
+                      playing: snapshot.data ?? true,
+                      danmakuEnabled:
+                          SettingsService.to.danmaku.enablePipDanmaku.value &&
+                          !(_videoController?.hideDanmaku.value ?? false),
+                      onTogglePlayback: togglePlayPause,
+                      onToggleDanmaku: () {
+                        final setting = SettingsService.to.danmaku.enablePipDanmaku;
+                        final hidden = _videoController?.hideDanmaku.value ?? false;
+                        setting.value = hidden || !setting.value;
+                        if (setting.value) _videoController?.hideDanmaku.value = false;
                       },
+                      onRestore: exitPip,
+                      restoreLabel: i18n('desktop_pip_restore'),
+                      danmakuLabel: i18n('desktop_pip_danmaku'),
                     ),
                   ),
                 ),
-              ),
-              Positioned(
-                right: 8,
-                top: 8,
-                child: Obx(
-                  () => AnimatedOpacity(
-                    opacity: isHovered.value ? 1 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () async {
-                        await exitPip();
-                      },
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
       ),
+    );
+    if (!PlatformUtils.supportsDesktopPip) return content;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): exitPip,
+        const SingleActivator(LogicalKeyboardKey.space): togglePlayPause,
+      },
+      child: Focus(autofocus: true, child: content),
     );
   }
 
@@ -1613,31 +1633,27 @@ class PlayerManager {
       final boxFit = fitList.isEmpty ? BoxFit.contain : fitList[safeFitIndex];
       return RepaintBoundary(
         key: trackPipSource ? _pipSourceKey : null,
-        child: PureLivePipWidget(
-          child: Container(
-            color: Colors.black,
-            padding: EdgeInsets.zero,
-            child: KeyedSubtree(
-              key: videoKey.value,
-              child: Container(
-                color: Colors.black,
-                width: double.infinity,
-                height: double.infinity,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: Offstage(
-                        offstage: showAudioOnly,
-                        child: Container(color: Colors.black, child: _buildVideoWidget(player, boxFit)),
-                      ),
+        child: Container(
+          color: Colors.black,
+          padding: EdgeInsets.zero,
+          child: KeyedSubtree(
+            key: videoKey.value,
+            child: Container(
+              color: Colors.black,
+              width: double.infinity,
+              height: double.infinity,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Offstage(
+                      offstage: showAudioOnly,
+                      child: Container(color: Colors.black, child: _buildVideoWidget(player, boxFit)),
                     ),
-                    if (showAudioOnly)
-                      Positioned.fill(
-                        child: Builder(builder: (context) => buildAudioOnlyUI(context, currentFloatRoom)),
-                      ),
-                    if (controls != null) Positioned.fill(child: controls),
-                  ],
-                ),
+                  ),
+                  if (showAudioOnly)
+                    Positioned.fill(child: Builder(builder: (context) => buildAudioOnlyUI(context, currentFloatRoom))),
+                  if (controls != null) Positioned.fill(child: controls),
+                ],
               ),
             ),
           ),
@@ -1683,12 +1699,20 @@ class PlayerManager {
   }
 
   Future<void> _closeInternal() async {
+    _isClosing = true;
+    try {
+      await exitPip();
+    } catch (_) {
+      // A failed native window transition must not leave the decoder, audio
+      // session or room subscriptions alive when closing playback.
+      isInPip.value = false;
+      debugPrint('Desktop PiP restoration failed during player shutdown.');
+    }
     _audioModeVideoWarmTimer?.cancel();
     _audioModeVideoWarmTimer = null;
     _pendingRoomReentry = null;
     _appFloatingSession = null;
     _sessionId++;
-    _isClosing = true;
     isVideoRestorePending.value = false;
     // Let route/overlay widgets release their listeners before native teardown,
     // but keep the fence bounded. endOfFrame stays pending when close is called
@@ -2008,7 +2032,7 @@ class PlayerManager {
 
         _widthSubject.add(event);
 
-        if (Platform.isWindows && isInPip.value) {
+        if (PlatformUtils.supportsDesktopPip && isInPip.value) {
           _schedulePipGeometryUpdate();
         }
       }),
@@ -2022,7 +2046,7 @@ class PlayerManager {
 
         _heightSubject.add(event);
 
-        if (Platform.isWindows && isInPip.value) {
+        if (PlatformUtils.supportsDesktopPip && isInPip.value) {
           _schedulePipGeometryUpdate();
         }
       }),
