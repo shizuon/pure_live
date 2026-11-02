@@ -42,6 +42,7 @@ class CompactDanmakuOverlay extends StatelessWidget {
             final fontSize = configuredFontSize * scale;
 
             return RepaintBoundary(
+              key: controller.pipDanmuKey,
               child: FlameBarrageWidget(
                 controller: controller.pipDanmakuController,
                 config: BarrageConfig(

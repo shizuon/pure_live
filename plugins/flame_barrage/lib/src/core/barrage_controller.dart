@@ -1,5 +1,6 @@
 class BarrageController {
   dynamic _engine;
+  int _interactionRevision = 0;
   void Function(dynamic)? _onAddDanmaku;
   void Function(dynamic)? _onUpdateOption;
   void Function()? _onPause;
@@ -25,11 +26,13 @@ class BarrageController {
   }
 
   void attach(dynamic engine) {
+    _interactionRevision++;
     _engine = engine;
   }
 
   void detach([dynamic engine]) {
     if (engine != null && !identical(_engine, engine)) return;
+    _interactionRevision++;
     _engine = null;
     _onAddDanmaku = null;
     _onUpdateOption = null;
@@ -59,17 +62,26 @@ class BarrageController {
   }
 
   void clear() {
+    _interactionRevision++;
     _onClear?.call();
   }
 
-  bool triggerItemAt(double x, double y, {required bool longPress}) {
+  void Function()? actionAt(double x, double y, {required bool longPress}) {
     final currentEngine = _engine;
-    if (currentEngine == null) return false;
-    try {
-      return currentEngine.triggerItemAt(x, y, longPress: longPress) as bool;
-    } catch (_) {
-      return false;
-    }
+    if (currentEngine == null) return null;
+    final revision = _interactionRevision;
+    final action = currentEngine.actionAt(x, y, longPress: longPress) as void Function()?;
+    if (action == null) return null;
+    return () {
+      if (revision == _interactionRevision && identical(currentEngine, _engine)) action();
+    };
+  }
+
+  bool triggerItemAt(double x, double y, {required bool longPress}) {
+    final action = actionAt(x, y, longPress: longPress);
+    if (action == null) return false;
+    action();
+    return true;
   }
 
   int get totalEmitted => _totalEmittedCount;

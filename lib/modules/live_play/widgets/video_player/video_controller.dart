@@ -54,7 +54,6 @@ class DanmakuManager {
   bool _configUpdateScheduled = false;
   bool _settingsDirty = false;
   bool _disposed = false;
-  DateTime? _lastLongPressAction;
 
   DanmakuManager({
     required this.controller,
@@ -124,17 +123,20 @@ class DanmakuManager {
     );
   }
 
-  void _openMessageActions(LiveMessage message, {required bool fromLongPress}) {
-    final now = DateTime.now();
-    if (fromLongPress) {
-      _lastLongPressAction = now;
-    } else if (_lastLongPressAction != null && now.difference(_lastLongPressAction!) < const Duration(seconds: 1)) {
-      return;
-    }
+  void _openMessageActions(LiveMessage message) {
     final context = Get.context;
     if (context == null) return;
+    final mainWasRunning = controller.running;
+    final pipWasRunning = pipController.running;
     controller.pause();
-    unawaited(DanmakuMessageActions.show(context, message).whenComplete(controller.resume));
+    pipController.pause();
+    unawaited(
+      DanmakuMessageActions.show(context, message).whenComplete(() {
+        if (_disposed) return;
+        if (mainWasRunning) controller.resume();
+        if (pipWasRunning) pipController.resume();
+      }),
+    );
   }
 
   void _scheduleConfigUpdate() {
@@ -203,10 +205,8 @@ class DanmakuManager {
           // A single px/s value keeps portrait, landscape and desktop motion
           // consistent. Lane collision avoidance is handled by the engine.
           baseSpeed: localStyle?.baseSpeed ?? videoController.danmakuSpeed.value,
-          onTapUp: settings.enableDanmakuTapInteraction.v ? () => _openMessageActions(msg, fromLongPress: false) : null,
-          onLongTapDown: settings.enableDanmakuLongPressInteraction.v
-              ? () => _openMessageActions(msg, fromLongPress: true)
-              : null,
+          onTapUp: () => unawaited(DanmakuMessageActions.copy(msg)),
+          onLongTapDown: () => _openMessageActions(msg),
         ),
       );
     }
@@ -239,16 +239,22 @@ class DanmakuManager {
           shadowOffset: localStyle == null ? null : Offset(localStyle.shadowOffset, localStyle.shadowOffset),
           fixedDuration: localStyle == null ? null : Duration(milliseconds: localStyle.fixedDurationMs),
           baseSpeed: localStyle?.baseSpeed,
+          onTapUp: () => unawaited(DanmakuMessageActions.copy(msg)),
+          onLongTapDown: () => _openMessageActions(msg),
         ),
       );
     }
   }
 
-  bool handlePointer(Offset position, {required bool longPress}) {
+  VoidCallback? resolveAction(Offset position, {required bool longPress, bool compact = false}) {
     final settings = settingsService.danmaku;
-    final enabled = longPress ? settings.enableDanmakuLongPressInteraction.v : settings.enableDanmakuTapInteraction.v;
-    if (!enabled) return false;
-    return controller.triggerItemAt(position.dx, position.dy, longPress: longPress);
+    bool enabled() => longPress ? settings.enableDanmakuLongPressInteraction.v : settings.enableDanmakuTapInteraction.v;
+    if (!enabled()) return null;
+    final action = (compact ? pipController : controller).actionAt(position.dx, position.dy, longPress: longPress);
+    if (action == null) return null;
+    return () {
+      if (!_disposed && enabled()) action();
+    };
   }
 
   void dispose() {
@@ -352,6 +358,7 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
   // Keys
   GlobalKey<BrightnessVolumnDargAreaState> brightnessKey = GlobalKey<BrightnessVolumnDargAreaState>();
   final danmuKey = GlobalKey();
+  final pipDanmuKey = GlobalKey();
   GlobalKey playerKey = GlobalKey();
 
   // 屏幕亮度
@@ -810,17 +817,12 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
     _danmakuManager.sendDanmaku(msg, _playerManager.isPlayingNow, _playerManager.isCompactModeActive);
   }
 
-  bool handleDanmakuPointer(Offset globalPosition, {required bool longPress}) {
-    final renderObject = danmuKey.currentContext?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) return false;
+  VoidCallback? resolveDanmakuAction(Offset globalPosition, {required bool longPress, bool compact = false}) {
+    final renderObject = (compact ? pipDanmuKey : danmuKey).currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
     final localPosition = renderObject.globalToLocal(globalPosition);
-    if (localPosition.dx < 0 ||
-        localPosition.dy < 0 ||
-        localPosition.dx > renderObject.size.width ||
-        localPosition.dy > renderObject.size.height) {
-      return false;
-    }
-    return _danmakuManager.handlePointer(localPosition, longPress: longPress);
+    if (!(Offset.zero & renderObject.size).contains(localPosition)) return null;
+    return _danmakuManager.resolveAction(localPosition, longPress: longPress, compact: compact);
   }
 
   void clearPipDanmaku() => pipDanmakuController.clear();
