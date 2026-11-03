@@ -1275,7 +1275,7 @@
     "blocked_danmaku_users": "已屏蔽用户（{count}）",
     "dynamic_follow_display": "跟随界面刷新率策略",
     "danmaku_fps_policy_desc": "开启：跟随通用里的省电、均衡或最高档位并立即生效；关闭：仅使用这里的手动帧率。",
-    "pip_danmaku_fps_policy_desc": "开启：小窗弹幕跟随同一全局档位；关闭：小窗使用独立手动帧率，不影响主画面。",
+    "pip_danmaku_fps_policy_desc": "开启：Mac 小窗跟随所在屏幕刷新率，其他平台跟随全局档位；关闭：使用独立手动帧率，不影响主画面。",
     "danmaku_templates": "弹幕观看模板",
     "danmaku_template_best": "顶部 20% · 均衡",
     "danmaku_template_comfort": "顶部 35% · 舒适",

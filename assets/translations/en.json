@@ -1275,7 +1275,7 @@
     "blocked_danmaku_users": "Blocked users ({count})",
     "dynamic_follow_display": "Follow interface refresh policy",
     "danmaku_fps_policy_desc": "On: follows the global Power saving, Balanced, or Highest tier immediately. Off: uses only this manual frame rate.",
-    "pip_danmaku_fps_policy_desc": "On: PiP danmaku follows the same global tier. Off: PiP uses its own manual rate without changing the room renderer.",
+    "pip_danmaku_fps_policy_desc": "On: Mac mini windows follow their display refresh rate; other platforms follow the global tier. Off: use an independent manual rate without changing the room renderer.",
     "danmaku_templates": "Danmaku viewing templates",
     "danmaku_template_best": "Top 20% · Balanced",
     "danmaku_template_comfort": "Top 35% · Comfort",

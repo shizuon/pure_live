@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:pure_live/get/get.dart';
 import 'package:pure_live/common/services/utils/hive_rx.dart';
 import 'package:pure_live/common/models/app_refresh_rate_mode.dart';
@@ -8,7 +9,7 @@ class DanmakuSettingsController extends GetxController {
   static const bool defaultPipDanmakuAutoScale = true;
   static const bool defaultPipDanmakuUseOriginalColor = true;
   static const int defaultPipDanmakuColor = 0xFFFFFFFF;
-  static const double defaultPipDanmakuFontSize = 12.0;
+  static double get defaultPipDanmakuFontSize => defaultTargetPlatform == TargetPlatform.macOS ? 14.0 : 12.0;
   static const int defaultPipDanmakuFontWeight = 500;
   static const double defaultPipDanmakuSpeed = 90.0;
   static const double defaultPipDanmakuOpacity = 0.9;
@@ -61,6 +62,7 @@ class DanmakuSettingsController extends GetxController {
   final RxDouble pipDanmakuEmitInterval = hiveDouble('pipDanmakuEmitInterval', defaultPipDanmakuEmitInterval);
   final RxInt pipDanmakuFps = hiveInt('pipDanmakuFps', defaultPipDanmakuFps);
   final RxBool pipDanmakuAutoFps = hiveBool('pipDanmakuAutoFps', true);
+  final RxInt macosPipReadabilityMigration = hiveInt('macosPipReadabilityMigration', 0);
 
   //   Enable danmaku Similarity Filter
   final RxBool enableDanmakuSimilarityFilter = hiveBool('enableDanmakuSimilarityFilter', true);
@@ -72,6 +74,12 @@ class DanmakuSettingsController extends GetxController {
     super.onInit();
     danmakuFontWeight.v = normalizeFontWeight(danmakuFontWeight.v);
     pipDanmakuFontWeight.v = normalizeFontWeight(pipDanmakuFontWeight.v);
+    if (defaultTargetPlatform == TargetPlatform.macOS && macosPipReadabilityMigration.v < 1) {
+      // Upgrade only the old default. A user's custom size survives, and a
+      // later deliberate change back to 12 is not undone on every launch.
+      if (pipDanmakuFontSize.v == 12.0) pipDanmakuFontSize.v = defaultPipDanmakuFontSize;
+      macosPipReadabilityMigration.v = 1;
+    }
     danmakuSimilarityThreshold.v = danmakuSimilarityThreshold.v.clamp(50, 100).toInt();
     danmakuSimilarityCacheDuration.v = danmakuSimilarityCacheDuration.v.clamp(1, 60).toInt();
     danmakuSimilarityMaxCacheSize.v = danmakuSimilarityMaxCacheSize.v.clamp(20, 1000).toInt();
@@ -82,10 +90,21 @@ class DanmakuSettingsController extends GetxController {
     }
   }
 
-  int resolvedDanmakuFps({bool pip = false, AppRefreshRateMode refreshRateMode = AppRefreshRateMode.powerSaving}) {
+  int resolvedDanmakuFps({
+    bool pip = false,
+    AppRefreshRateMode refreshRateMode = AppRefreshRateMode.powerSaving,
+    double? compactDisplayRefreshRate,
+  }) {
     final auto = pip ? pipDanmakuAutoFps.v : danmakuAutoFps.v;
     final configured = pip ? pipDanmakuFps.v : danmakuFps.v;
     if (!auto) return configured.clamp(pip ? 15 : 30, 240).toInt();
+    // macOS mini windows share the desktop compositor, not Android's PiP
+    // power budget. Use the hosting view's display (including external screens)
+    // so each vsync can advance the text instead of repeating a 30 FPS pose.
+    if (pip && compactDisplayRefreshRate != null) {
+      final rate = compactDisplayRefreshRate;
+      return (rate.isFinite && rate > 0 ? rate.round() : 60).clamp(30, 240).toInt();
+    }
     return resolveAdaptiveDanmakuFps(DisplayModeService.info.value, pip: pip, refreshRateMode: refreshRateMode);
   }
 

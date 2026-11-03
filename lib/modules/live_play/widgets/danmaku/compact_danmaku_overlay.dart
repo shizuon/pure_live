@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:flame_barrage/flame_barrage.dart';
 import 'package:pure_live/modules/live_play/widgets/video_player/video_controller.dart';
+
+import 'compact_danmaku_metrics.dart';
 
 class CompactDanmakuOverlay extends StatelessWidget {
   const CompactDanmakuOverlay({super.key, required this.controller});
@@ -8,7 +11,10 @@ class CompactDanmakuOverlay extends StatelessWidget {
   final VideoController controller;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => CompactDanmakuDisplay(builder: _buildOverlay);
+
+  Widget _buildOverlay(BuildContext context, double? displayRefreshRate) {
+    final macos = defaultTargetPlatform == TargetPlatform.macOS;
     return Obx(() {
       final settings = SettingsService.to.danmaku;
       final enabled = settings.enablePipDanmaku.v;
@@ -28,7 +34,11 @@ class CompactDanmakuOverlay extends StatelessWidget {
       final area = settings.pipDanmakuArea.v;
       final speed = settings.pipDanmakuSpeed.v;
       final opacity = settings.pipDanmakuOpacity.v;
-      final fps = settings.resolvedDanmakuFps(pip: true, refreshRateMode: SettingsService.to.app.refreshRateMode);
+      final fps = settings.resolvedDanmakuFps(
+        pip: true,
+        refreshRateMode: SettingsService.to.app.refreshRateMode,
+        compactDisplayRefreshRate: displayRefreshRate,
+      );
       final maxVisibleCount = settings.pipDanmakuMaxVisibleCount.v;
       final emitInterval = settings.pipDanmakuEmitInterval.v;
       final fontFamily = controller.danmakuFontFamilyName.value;
@@ -38,7 +48,7 @@ class CompactDanmakuOverlay extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth.isFinite ? constraints.maxWidth : 350.0;
-            final scale = autoScale ? (width / 350.0).clamp(0.65, 1.0).toDouble() : 1.0;
+            final scale = resolveCompactDanmakuScale(width: width, autoScale: autoScale, macos: macos);
             final fontSize = configuredFontSize * scale;
 
             return RepaintBoundary(

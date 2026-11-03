@@ -25,6 +25,7 @@ import 'package:pure_live/modules/live_play/widgets/content_first_panel_layout.d
 import 'package:pure_live/modules/live_play/widgets/video_player/volume_control.dart';
 import 'package:pure_live/modules/live_play/widgets/video_player/video_controller.dart';
 import 'package:pure_live/modules/live_play/widgets/danmaku/danmaku_settings_binding.dart';
+import 'package:pure_live/modules/live_play/widgets/danmaku/danmaku_gesture_surface.dart';
 import 'package:pure_live/modules/live_play/widgets/local_interaction/local_danmaku_style_editor.dart';
 
 @visibleForTesting
@@ -78,7 +79,6 @@ class VideoControllerPanel extends StatefulWidget {
 
 class _VideoControllerPanelState extends State<VideoControllerPanel> {
   static const barHeight = 56.0;
-  Offset? _lastTapPosition;
 
   VideoController get controller => widget.controller;
 
@@ -166,11 +166,9 @@ class _VideoControllerPanelState extends State<VideoControllerPanel> {
                   }
                   return DanmakuViewer(key: controller.danmuKey, controller: controller);
                 }),
-                GestureDetector(
-                  onTapDown: (details) => _lastTapPosition = details.globalPosition,
-                  onTap: () {
-                    final position = _lastTapPosition;
-                    if (position != null && controller.handleDanmakuPointer(position, longPress: false)) return;
+                DanmakuGestureSurface(
+                  captureTarget: controller.captureDanmakuPointer,
+                  onBackgroundTap: () {
                     // A buffering/paused player must not swallow the only way
                     // to reveal its controls. Always expose the action bar; a
                     // tap on a paused surface keeps the historical resume
@@ -180,9 +178,6 @@ class _VideoControllerPanelState extends State<VideoControllerPanel> {
                     if (!commentary.isPlaying) {
                       commentary.togglePlayPause();
                     }
-                  },
-                  onLongPressStart: (details) {
-                    controller.handleDanmakuPointer(details.globalPosition, longPress: true);
                   },
                   onDoubleTap: () {
                     if (!controller.showLocked.value) {

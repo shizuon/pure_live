@@ -221,21 +221,25 @@ class BarrageEngine extends FlameGame with TapCallbacks {
     }
   }
 
-  /// Dispatches a Flutter-layer pointer to the top-most visible barrage item.
-  /// This lets the video gesture surface keep swipe/double-tap handling while
-  /// still supporting precise danmaku actions.
-  bool triggerItemAt(double x, double y, {required bool longPress}) {
+  /// Snapshot the message, never its pooled/moving entry. Gesture recognition
+  /// can finish hundreds of milliseconds after the pointer first went down.
+  BarrageItem? itemAt(double x, double y) {
     for (var i = _activeEntries.length - 1; i >= 0; i--) {
       final entry = _activeEntries[i];
       if (!entry.active || x < entry.x || x > entry.x + entry.width || y < entry.y || y > entry.y + entry.height) {
         continue;
       }
-      final callback = longPress ? entry.item.onLongTapDown : entry.item.onTapUp;
-      if (callback == null) return false;
-      callback();
-      return true;
+      return entry.item;
     }
-    return false;
+    return null;
+  }
+
+  bool triggerItemAt(double x, double y, {required bool longPress}) {
+    final item = itemAt(x, y);
+    final callback = longPress ? item?.onLongTapDown : item?.onTapUp;
+    if (callback == null) return false;
+    callback();
+    return true;
   }
 
   @override

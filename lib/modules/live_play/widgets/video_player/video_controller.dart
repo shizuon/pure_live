@@ -26,6 +26,7 @@ import 'package:pure_live/modules/live_play/controllers/player_state.dart';
 import 'package:pure_live/modules/live_play/controllers/live_play_controller.dart';
 import 'package:pure_live/modules/live_play/widgets/danmaku/danmaku_message_actions.dart';
 import 'package:pure_live/modules/live_play/widgets/danmaku/danmaku_settings_binding.dart';
+import 'package:pure_live/modules/live_play/widgets/danmaku/danmaku_gesture_surface.dart';
 
 typedef AudioOnlyCallback = Future<void> Function(bool value);
 
@@ -54,7 +55,7 @@ class DanmakuManager {
   bool _configUpdateScheduled = false;
   bool _settingsDirty = false;
   bool _disposed = false;
-  DateTime? _lastLongPressAction;
+  bool _messageActionsOpen = false;
 
   DanmakuManager({
     required this.controller,
@@ -125,16 +126,25 @@ class DanmakuManager {
   }
 
   void _openMessageActions(LiveMessage message, {required bool fromLongPress}) {
-    final now = DateTime.now();
-    if (fromLongPress) {
-      _lastLongPressAction = now;
-    } else if (_lastLongPressAction != null && now.difference(_lastLongPressAction!) < const Duration(seconds: 1)) {
-      return;
-    }
+    final settings = settingsService.danmaku;
+    final enabled = fromLongPress
+        ? settings.enableDanmakuLongPressInteraction.v
+        : settings.enableDanmakuTapInteraction.v;
+    if (_disposed || _messageActionsOpen || !enabled) return;
     final context = Get.context;
     if (context == null) return;
+    _messageActionsOpen = true;
+    final wasRunning = controller.running;
     controller.pause();
-    unawaited(DanmakuMessageActions.show(context, message).whenComplete(controller.resume));
+    unawaited(
+      DanmakuMessageActions.show(context, message).whenComplete(() {
+        _messageActionsOpen = false;
+        // The same controller can attach a fresh renderer after a resize or
+        // fullscreen transition while the sheet is open. Release our pause on
+        // that controller too, otherwise send() keeps dropping future text.
+        if (!_disposed && wasRunning) controller.resume();
+      }),
+    );
   }
 
   void _scheduleConfigUpdate() {
@@ -203,10 +213,10 @@ class DanmakuManager {
           // A single px/s value keeps portrait, landscape and desktop motion
           // consistent. Lane collision avoidance is handled by the engine.
           baseSpeed: localStyle?.baseSpeed ?? videoController.danmakuSpeed.value,
-          onTapUp: settings.enableDanmakuTapInteraction.v ? () => _openMessageActions(msg, fromLongPress: false) : null,
-          onLongTapDown: settings.enableDanmakuLongPressInteraction.v
-              ? () => _openMessageActions(msg, fromLongPress: true)
-              : null,
+          // Resolve interaction preferences at press/activation time so an
+          // already visible message responds to settings changes immediately.
+          onTapUp: () => _openMessageActions(msg, fromLongPress: false),
+          onLongTapDown: () => _openMessageActions(msg, fromLongPress: true),
         ),
       );
     }
@@ -244,11 +254,26 @@ class DanmakuManager {
     }
   }
 
-  bool handlePointer(Offset position, {required bool longPress}) {
+  DanmakuPointerTarget? capturePointer(Offset position) {
     final settings = settingsService.danmaku;
-    final enabled = longPress ? settings.enableDanmakuLongPressInteraction.v : settings.enableDanmakuTapInteraction.v;
-    if (!enabled) return false;
-    return controller.triggerItemAt(position.dx, position.dy, longPress: longPress);
+    final engine = controller.engine;
+    final item = controller.itemAt(position.dx, position.dy);
+    if (item == null || _disposed) return null;
+    VoidCallback? guard(VoidCallback? action) => action == null
+        ? null
+        : () {
+            if (!_disposed &&
+                identical(engine, controller.engine) &&
+                !videoController.hideDanmaku.value &&
+                !videoController.showLocked.value &&
+                settings.enableDanmakuDisplay.v) {
+              action();
+            }
+          };
+    return DanmakuPointerTarget(
+      onTap: settings.enableDanmakuTapInteraction.v ? guard(item.onTapUp) : null,
+      onLongPress: settings.enableDanmakuLongPressInteraction.v ? guard(item.onLongTapDown) : null,
+    );
   }
 
   void dispose() {
@@ -810,17 +835,18 @@ class VideoController with ChangeNotifier implements DanmakuSettingsBinding {
     _danmakuManager.sendDanmaku(msg, _playerManager.isPlayingNow, _playerManager.isCompactModeActive);
   }
 
-  bool handleDanmakuPointer(Offset globalPosition, {required bool longPress}) {
+  DanmakuPointerTarget? captureDanmakuPointer(Offset globalPosition) {
+    if (showLocked.value || hideDanmaku.value || !SettingsService.to.danmaku.enableDanmakuDisplay.v) return null;
     final renderObject = danmuKey.currentContext?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) return false;
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
     final localPosition = renderObject.globalToLocal(globalPosition);
     if (localPosition.dx < 0 ||
         localPosition.dy < 0 ||
         localPosition.dx > renderObject.size.width ||
         localPosition.dy > renderObject.size.height) {
-      return false;
+      return null;
     }
-    return _danmakuManager.handlePointer(localPosition, longPress: longPress);
+    return _danmakuManager.capturePointer(localPosition);
   }
 
   void clearPipDanmaku() => pipDanmakuController.clear();

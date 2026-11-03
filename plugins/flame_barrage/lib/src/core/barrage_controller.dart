@@ -1,3 +1,5 @@
+import '../model/barrage/barrage_item.dart';
+
 class BarrageController {
   dynamic _engine;
   void Function(dynamic)? _onAddDanmaku;
@@ -60,6 +62,10 @@ class BarrageController {
 
   void clear() {
     _onClear?.call();
+  }
+
+  BarrageItem? itemAt(double x, double y) {
+    return _engine?.itemAt(x, y) as BarrageItem?;
   }
 
   bool triggerItemAt(double x, double y, {required bool longPress}) {

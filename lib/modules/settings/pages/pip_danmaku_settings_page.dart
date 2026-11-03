@@ -1,10 +1,12 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/common/consts/app_consts.dart';
 import 'package:syncfusion_flutter_sliders/sliders.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:pure_live/common/widgets/count_button.dart';
+import 'package:pure_live/modules/live_play/widgets/danmaku/compact_danmaku_metrics.dart';
 
 class PipDanmakuSettingsPage extends StatelessWidget {
   const PipDanmakuSettingsPage({super.key});
@@ -151,7 +153,9 @@ class PipDanmakuSettingsSection extends StatelessWidget {
   const PipDanmakuSettingsSection({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => CompactDanmakuDisplay(builder: _buildSettings);
+
+  Widget _buildSettings(BuildContext context, double? displayRefreshRate) {
     final theme = Theme.of(context);
     final labelColor = theme.colorScheme.onSurface;
     final digitColor = theme.colorScheme.primary;
@@ -298,7 +302,7 @@ class PipDanmakuSettingsSection extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                   child: Text(
-                    '${settings.resolvedDanmakuFps(pip: true, refreshRateMode: SettingsService.to.app.refreshRateMode)} FPS',
+                    '${settings.resolvedDanmakuFps(pip: true, refreshRateMode: SettingsService.to.app.refreshRateMode, compactDisplayRefreshRate: displayRefreshRate)} FPS',
                     style: TextStyle(color: digitColor, fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -517,7 +521,9 @@ class _PipDanmakuPreviewState extends State<PipDanmakuPreview> with SingleTicker
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => CompactDanmakuDisplay(builder: _buildPreview);
+
+  Widget _buildPreview(BuildContext context, double? displayRefreshRate) {
     return Obx(() {
       final settings = SettingsService.to.danmaku;
       // Read every Rx value directly in the Obx callback. Values read only in
@@ -535,7 +541,11 @@ class _PipDanmakuPreviewState extends State<PipDanmakuPreview> with SingleTicker
       final area = settings.pipDanmakuArea.v;
       final maxVisibleCount = settings.pipDanmakuMaxVisibleCount.v;
       final emitInterval = settings.pipDanmakuEmitInterval.v;
-      final fps = settings.resolvedDanmakuFps(pip: true, refreshRateMode: SettingsService.to.app.refreshRateMode);
+      final fps = settings.resolvedDanmakuFps(
+        pip: true,
+        refreshRateMode: SettingsService.to.app.refreshRateMode,
+        compactDisplayRefreshRate: displayRefreshRate,
+      );
       final colors = useOriginalColor
           ? const [Color(0xFFFFFFFF), Color(0xFF64B5F6), Color(0xFFFFD54F), Color(0xFF81C784)]
           : [unifiedColor];
@@ -555,7 +565,11 @@ class _PipDanmakuPreviewState extends State<PipDanmakuPreview> with SingleTicker
               ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final scale = autoScale ? (constraints.maxWidth / 350).clamp(0.65, 1.0).toDouble() : 1.0;
+                  final scale = resolveCompactDanmakuScale(
+                    width: constraints.maxWidth,
+                    autoScale: autoScale,
+                    macos: defaultTargetPlatform == TargetPlatform.macOS,
+                  );
                   final fontSize = configuredFontSize * scale;
                   final areaHeight = constraints.maxHeight * area;
                   final previewText = i18n('pip_danmaku_preview_text');
