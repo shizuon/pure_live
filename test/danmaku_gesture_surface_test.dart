@@ -18,10 +18,10 @@ void main() {
       await _advance(tester, 12);
       // The original implementation hits this now-empty position after the
       // tap/double-tap decision. The captured message must remain actionable.
-      expect(harness.itemAt(point), isNull);
+      expect(harness.actionAt(point), isNull);
       await gesture.up();
       await _advance(tester, 24);
-      expect(harness.events, ['tap:first']);
+      expect(harness.events, [buttons == kPrimaryButton ? 'tap:first' : 'long:first']);
     });
   }
 
@@ -40,7 +40,7 @@ void main() {
     final point = harness.messagePoint();
     final gesture = await tester.startGesture(point);
     await _advance(tester, 40);
-    expect(harness.itemAt(point), isNull);
+    expect(harness.actionAt(point), isNull);
     await gesture.up();
     await _advance(tester, 24);
     expect(harness.events, ['long:first']);
@@ -106,7 +106,7 @@ void main() {
     expect(find.text('viewer: first'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.copy_all_rounded));
     await tester.pumpAndSettle();
-    expect(clipboard, 'viewer: first');
+    expect(clipboard, 'first');
   });
 }
 
@@ -124,9 +124,9 @@ class _Harness {
   RenderBox get box => surfaceKey.currentContext!.findRenderObject()! as RenderBox;
   Offset get origin => box.localToGlobal(Offset.zero);
 
-  BarrageItem? itemAt(Offset global) {
+  VoidCallback? actionAt(Offset global, {bool longPress = false}) {
     final local = box.globalToLocal(global);
-    return controller.itemAt(local.dx, local.dy);
+    return controller.actionAt(local.dx, local.dy, longPress: longPress);
   }
 
   Offset messagePoint() {
@@ -134,7 +134,7 @@ class _Harness {
     // vacated this pixel before recognition completes. No private entry access.
     for (var x = 398.0; x >= 0; x -= 2) {
       for (var y = 2.0; y < 80; y += 2) {
-        if (controller.itemAt(x, y) != null) return origin + Offset(x, y);
+        if (controller.actionAt(x, y, longPress: false) != null) return origin + Offset(x, y);
       }
     }
     throw StateError('Expected a visible scrolling message');
@@ -170,12 +170,8 @@ Future<_Harness> _mount(WidgetTester tester, {bool interactive = true, bool show
                       controller: harness.controller,
                     ),
                     DanmakuGestureSurface(
-                      captureTarget: (point) {
-                        final item = harness.itemAt(point);
-                        return item == null
-                            ? null
-                            : DanmakuPointerTarget(onTap: item.onTapUp, onLongPress: item.onLongTapDown);
-                      },
+                      resolveAction: (point, {required longPress}) =>
+                          interactive ? harness.actionAt(point, longPress: longPress) : null,
                       onBackgroundTap: () => harness.events.add('controls'),
                       onDoubleTap: () => harness.events.add('fullscreen'),
                       child: GestureDetector(
@@ -197,25 +193,23 @@ Future<_Harness> _mount(WidgetTester tester, {bool interactive = true, bool show
   harness.controller.send(
     BarrageItem(
       content: 'first',
-      onTapUp: !interactive
-          ? null
-          : () {
-              harness.events.add('tap:first');
-              if (showMenu) {
-                harness.controller.pause();
-                DanmakuMessageActions.show(
-                  menuContext,
-                  LiveMessage(
-                    type: LiveMessageType.chat,
-                    userName: 'viewer',
-                    message: 'first',
-                    color: LiveMessageColor(255, 255, 255),
-                    isLocal: true,
-                  ),
-                );
-              }
-            },
-      onLongTapDown: !interactive ? null : () => harness.events.add('long:first'),
+      onTapUp: () => harness.events.add('tap:first'),
+      onLongTapDown: () {
+        harness.events.add('long:first');
+        if (showMenu) {
+          harness.controller.pause();
+          DanmakuMessageActions.show(
+            menuContext,
+            LiveMessage(
+              type: LiveMessageType.chat,
+              userName: 'viewer',
+              message: 'first',
+              color: LiveMessageColor(255, 255, 255),
+              isLocal: true,
+            ),
+          );
+        }
+      },
     ),
   );
   await _advance(tester, 30);

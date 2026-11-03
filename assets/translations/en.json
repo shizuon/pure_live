@@ -1286,7 +1286,7 @@
     "danmaku_template_saved": "Current danmaku style saved",
     "danmaku_template_empty": "No saved danmaku template yet",
     "danmaku_screen_interaction": "On-screen danmaku interaction",
-    "danmaku_tap_action": "Tap an on-screen danmaku for actions",
+    "danmaku_tap_action": "Tap an on-screen danmaku to copy its text",
     "danmaku_long_press_action": "Long-press an on-screen danmaku for block actions",
     "prefer_real_online_counts": "Prefer real online counts",
     "prefer_real_online_counts_desc": "Show and sort by real online counts on supported platforms; label the native metric elsewhere",

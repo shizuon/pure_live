@@ -1286,7 +1286,7 @@
     "danmaku_template_saved": "当前弹幕样式已保存",
     "danmaku_template_empty": "还没有保存弹幕模板",
     "danmaku_screen_interaction": "屏幕弹幕交互",
-    "danmaku_tap_action": "点击画面弹幕查看操作",
+    "danmaku_tap_action": "点击画面弹幕复制正文",
     "danmaku_long_press_action": "长按画面弹幕打开屏蔽操作",
     "prefer_real_online_counts": "优先显示真实在线人数",
     "prefer_real_online_counts_desc": "支持的平台显示真实在线人数并用于排序；其他平台标注其原生统计口径",

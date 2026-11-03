@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 import 'dart:collection';
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:pure_live/common/index.dart';
@@ -438,10 +437,7 @@ class DanmakuItem extends StatelessWidget {
 
   const DanmakuItem({super.key, required this.danmaku});
 
-  Future<void> _copyMessage() async {
-    await Clipboard.setData(ClipboardData(text: "${danmaku.userName}: ${danmaku.message}"));
-    ToastUtil.show(i18n('copied_to_clipboard'));
-  }
+  Future<void> _copyMessage() => DanmakuMessageActions.copy(danmaku);
 
   Future<void> _showActions(BuildContext context) => DanmakuMessageActions.show(context, danmaku);
 
@@ -488,7 +484,7 @@ class DanmakuItem extends StatelessWidget {
                     behavior: HitTestBehavior.translucent,
                     onSecondaryTap: () => _showActions(context),
                     onLongPress: () => _showActions(context),
-                    onDoubleTap: _copyMessage,
+                    onTap: _copyMessage,
                     child: Text.rich(
                       TextSpan(
                         children: [

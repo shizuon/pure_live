@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'dart:async';
 
+import '../danmaku/danmaku_gesture_surface.dart';
+import 'player_top_bar_surface.dart';
+
 import 'package:flutter_svg/svg.dart';
 import 'package:flutter/gestures.dart';
 import 'package:remixicon/remixicon.dart';
@@ -25,7 +28,6 @@ import 'package:pure_live/modules/live_play/widgets/content_first_panel_layout.d
 import 'package:pure_live/modules/live_play/widgets/video_player/volume_control.dart';
 import 'package:pure_live/modules/live_play/widgets/video_player/video_controller.dart';
 import 'package:pure_live/modules/live_play/widgets/danmaku/danmaku_settings_binding.dart';
-import 'package:pure_live/modules/live_play/widgets/danmaku/danmaku_gesture_surface.dart';
 import 'package:pure_live/modules/live_play/widgets/local_interaction/local_danmaku_style_editor.dart';
 
 @visibleForTesting
@@ -167,7 +169,7 @@ class _VideoControllerPanelState extends State<VideoControllerPanel> {
                   return DanmakuViewer(key: controller.danmuKey, controller: controller);
                 }),
                 DanmakuGestureSurface(
-                  captureTarget: controller.captureDanmakuPointer,
+                  resolveAction: controller.resolveDanmakuAction,
                   onBackgroundTap: () {
                     // A buffering/paused player must not swallow the only way
                     // to reveal its controls. Always expose the action bar; a
@@ -255,116 +257,101 @@ class TopActionBar extends StatelessWidget {
         right: 0,
         height: barHeight,
         duration: const Duration(milliseconds: 300),
-        child: Container(
-          height: barHeight,
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-              colors: [Colors.transparent, Colors.black45],
+        child: PlayerTopBarSurface(
+          leading: [
+            for (final slot in resolveTopActionLeadingSlots(
+              fullscreen: GlobalPlayerState.to.fullscreenUI,
+              android: PlatformUtils.isAndroid,
+            ))
+              switch (slot) {
+                TopActionLeadingSlot.back => BackButton(controller: controller),
+                TopActionLeadingSlot.datetime => const IgnorePointer(
+                  child: DatetimeInfo(key: ValueKey('fullscreen-leading-time')),
+                ),
+                TopActionLeadingSlot.battery => IgnorePointer(
+                  child: BatteryInfo(key: const ValueKey('fullscreen-leading-battery'), controller: controller),
+                ),
+              },
+          ],
+          title: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  controller.room.title!,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.t16.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+                if (controller.room.currentProgramme != null && controller.room.currentProgramme!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    "${i18n('now_playing')}: ${controller.room.currentProgramme!}",
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.85), decoration: TextDecoration.none),
+                  ),
+                ],
+              ],
             ),
           ),
-          child: Row(
-            children: [
-              for (final slot in resolveTopActionLeadingSlots(
-                fullscreen: GlobalPlayerState.to.fullscreenUI,
-                android: PlatformUtils.isAndroid,
-              ))
-                switch (slot) {
-                  TopActionLeadingSlot.back => BackButton(controller: controller),
-                  TopActionLeadingSlot.datetime => const DatetimeInfo(key: ValueKey('fullscreen-leading-time')),
-                  TopActionLeadingSlot.battery => BatteryInfo(
-                    key: const ValueKey('fullscreen-leading-battery'),
-                    controller: controller,
-                  ),
+          actions: [
+            if (controller.room.platform == Sites.iptvSite)
+              IconButton(
+                icon: const Icon(Icons.assignment_outlined), // 节目单账本图标
+                tooltip: i18n('view_schedule'),
+                color: Colors.white,
+                onPressed: () async {
+                  Get.dialog(
+                    AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      contentPadding: EdgeInsets.zero,
+                      content: _buildFullSchedulePanel(),
+                    ),
+                  );
                 },
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        controller.room.title!,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.t16.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.none,
-                        ),
-                      ),
-                      if (controller.room.currentProgramme != null && controller.room.currentProgramme!.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          "${i18n('now_playing')}: ${controller.room.currentProgramme!}",
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            decoration: TextDecoration.none,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
               ),
-
-              if (controller.room.platform == Sites.iptvSite)
-                IconButton(
-                  icon: const Icon(Icons.assignment_outlined), // 节目单账本图标
-                  tooltip: i18n('view_schedule'),
+            for (final slot in resolveTopActionTrailingSlots(
+              fullscreen: GlobalPlayerState.to.fullscreenUI,
+              android: PlatformUtils.isAndroid,
+              windows: PlatformUtils.isWindows,
+              macos: PlatformUtils.isMacOS,
+              commentarySupported: CommentaryPlatformSupport.isSupported,
+            ))
+              switch (slot) {
+                TopActionTrailingSlot.roomHistory => IconButton(
+                  key: const ValueKey('fullscreen-room-history'),
+                  icon: const Icon(Icons.swap_horiz_outlined),
+                  tooltip: i18n('switch_live_room'),
                   color: Colors.white,
-                  onPressed: () async {
-                    Get.dialog(
-                      AlertDialog(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        contentPadding: EdgeInsets.zero,
-                        content: _buildFullSchedulePanel(),
-                      ),
-                    );
+                  onPressed: () {
+                    Get.dialog(PlayOther(controller: Get.find<LivePlayController>()));
                   },
+                  style: IconButton.styleFrom(backgroundColor: Colors.black26),
                 ),
-              for (final slot in resolveTopActionTrailingSlots(
-                fullscreen: GlobalPlayerState.to.fullscreenUI,
-                android: PlatformUtils.isAndroid,
-                windows: PlatformUtils.isWindows,
-                macos: PlatformUtils.isMacOS,
-                commentarySupported: CommentaryPlatformSupport.isSupported,
-              ))
-                switch (slot) {
-                  TopActionTrailingSlot.roomHistory => IconButton(
-                    key: const ValueKey('fullscreen-room-history'),
-                    icon: const Icon(Icons.swap_horiz_outlined),
-                    tooltip: i18n('switch_live_room'),
-                    color: Colors.white,
-                    onPressed: () {
-                      Get.dialog(PlayOther(controller: Get.find<LivePlayController>()));
-                    },
-                    style: IconButton.styleFrom(backgroundColor: Colors.black26),
-                  ),
-                  TopActionTrailingSlot.datetime => const DatetimeInfo(),
-                  TopActionTrailingSlot.battery => BatteryInfo(controller: controller),
-                  TopActionTrailingSlot.audioOnly => AudioOnlyButton(
-                    key: const ValueKey('playback-action-audio-only'),
-                    controller: controller,
-                  ),
-                  TopActionTrailingSlot.commentary => CommentarySyncButton(controller: controller),
-                  TopActionTrailingSlot.cast => CastButton(
-                    key: const ValueKey('playback-action-cast'),
-                    controller: controller,
-                  ),
-                  TopActionTrailingSlot.pip => PIPButton(
-                    key: GlobalPlayerState.to.fullscreenUI
-                        ? const ValueKey('fullscreen-pip-shortcut')
-                        : const ValueKey('playback-action-pip'),
-                    controller: controller,
-                  ),
-                },
-            ],
-          ),
+                TopActionTrailingSlot.datetime => const IgnorePointer(child: DatetimeInfo()),
+                TopActionTrailingSlot.battery => IgnorePointer(child: BatteryInfo(controller: controller)),
+                TopActionTrailingSlot.audioOnly => AudioOnlyButton(
+                  key: const ValueKey('playback-action-audio-only'),
+                  controller: controller,
+                ),
+                TopActionTrailingSlot.commentary => CommentarySyncButton(controller: controller),
+                TopActionTrailingSlot.cast => CastButton(
+                  key: const ValueKey('playback-action-cast'),
+                  controller: controller,
+                ),
+                TopActionTrailingSlot.pip => PIPButton(
+                  key: GlobalPlayerState.to.fullscreenUI
+                      ? const ValueKey('fullscreen-pip-shortcut')
+                      : const ValueKey('playback-action-pip'),
+                  controller: controller,
+                ),
+              },
+          ],
         ),
       ),
     );

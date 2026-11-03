@@ -22,7 +22,7 @@ int rotl64(int t) {
 // lPid--s = a.lPresenterUid == topSid
 Future<List<LiveSuperChatMessage>> getHuyaSuperChatMessageList({required int lPid, bool first = false}) async {
   final BaseTarsHttp messageBoardClient = BaseTarsHttp(
-    "http://wup.huya.com",
+    HuyaRequestParams.wupUrl,
     "wupui",
     headers: HuyaRequestParams.requestHeaders,
   );

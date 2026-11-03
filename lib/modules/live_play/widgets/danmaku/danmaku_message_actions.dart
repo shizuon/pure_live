@@ -5,6 +5,11 @@ import 'package:pure_live/modules/live_play/controllers/live_play_controller.dar
 class DanmakuMessageActions {
   DanmakuMessageActions._();
 
+  static Future<void> copy(LiveMessage message) async {
+    await Clipboard.setData(ClipboardData(text: message.message));
+    ToastUtil.show(i18n('copied_to_clipboard'));
+  }
+
   static Future<void> show(BuildContext context, LiveMessage message) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -21,8 +26,7 @@ class DanmakuMessageActions {
               title: Text(i18n('copy')),
               onTap: () async {
                 Navigator.of(sheetContext).pop();
-                await Clipboard.setData(ClipboardData(text: '${message.userName}: ${message.message}'));
-                ToastUtil.show(i18n('copied_to_clipboard'));
+                await copy(message);
               },
             ),
             if (!message.isLocal && message.userName.trim().isNotEmpty)

@@ -221,24 +221,22 @@ class BarrageEngine extends FlameGame with TapCallbacks {
     }
   }
 
-  /// Snapshot the message, never its pooled/moving entry. Gesture recognition
-  /// can finish hundreds of milliseconds after the pointer first went down.
-  BarrageItem? itemAt(double x, double y) {
+  /// Captures the action, not a pooled entry or its changing coordinates.
+  VoidCallback? actionAt(double x, double y, {required bool longPress}) {
     for (var i = _activeEntries.length - 1; i >= 0; i--) {
       final entry = _activeEntries[i];
       if (!entry.active || x < entry.x || x > entry.x + entry.width || y < entry.y || y > entry.y + entry.height) {
         continue;
       }
-      return entry.item;
+      return longPress ? entry.item.onLongTapDown : entry.item.onTapUp;
     }
     return null;
   }
 
   bool triggerItemAt(double x, double y, {required bool longPress}) {
-    final item = itemAt(x, y);
-    final callback = longPress ? item?.onLongTapDown : item?.onTapUp;
-    if (callback == null) return false;
-    callback();
+    final action = actionAt(x, y, longPress: longPress);
+    if (action == null) return false;
+    action();
     return true;
   }
 

@@ -22,6 +22,7 @@ import '../models/player_error_type.dart';
 
 import 'package:rxdart/rxdart.dart' hide Rx;
 import 'package:pure_live/common/index.dart';
+import 'package:pure_live/modules/live_play/widgets/danmaku/danmaku_gesture_surface.dart';
 
 import '../interface/unified_player_interface.dart';
 import '../interface/sync_capable_player.dart';
@@ -1368,8 +1369,10 @@ class PlayerManager {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
+              DanmakuGestureSurface(
+                resolveAction: (position, {required longPress}) => PlatformUtils.supportsDesktopPip
+                    ? _videoController?.resolveDanmakuAction(position, longPress: longPress, compact: true)
+                    : null,
                 onPanStart: PlatformUtils.supportsDesktopPip ? (_) => windowManager.startDragging() : null,
                 onDoubleTap: exitPip,
                 child: Obx(

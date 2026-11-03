@@ -1,5 +1,12 @@
 # 虎牙 Windows 数分钟后停止：Issue 815 / 816
 
+> 历史记录说明：本页保存 2026-08-29 的源码审查与修复方案，不代表线路长播已经验收。
+> 2026-11-02 对 DANK1NG 的公开媒体探测发现，当时“页面签名原样后备”的规则
+> 把含 `fm` 的签名模板误当成最终凭据，仍会产生首段 FLV 后 EOF、HLS 到期后 403。
+> 此规则已由 [WUP HTTPS 与页面模板签名复核](HUYA_DANKING_TRANSPORT_2026_11_02.md)
+> 更正：FLV 优先 HTTPS WUP；HLS 使用自己的页面材料；含 `fm` 的模板必须签名，
+> 只有不含 `fm` 的 opaque token 保留原样。下文的旧设计和测试是当时的证据范围。
+
 ## 范围与来源
 
 - Issue：[815](https://github.com/liuchuancong/pure_live/issues/815)、[816](https://github.com/liuchuancong/pure_live/issues/816)
@@ -8,7 +15,7 @@
 - 最后正常版本：`2.9.8`
 - 当前上游冻结点：`fac506c76085a547af06ba8541473a836e108c16`
 - 来源分类：`upstream-existing`
-- 当前结论：源码回归已修复，仍需 Windows 线路 1～6 各 30 分钟实机验证后才能关闭 Issue。
+- 当时结论：完成了源码修改与离线测试；Windows 线路 1～6 各 30 分钟实机验证尚未完成。2026-11-02 已确认后备模板契约仍有缺口，不能据本页宣称这些线路已经修复或关闭 Issue。
 
 ## 最短复现与证据
 

@@ -64,7 +64,7 @@ class HuyaSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomRes
 
   static Map<String, String> requestHeaders = {'Origin': baseUrl, 'Referer': baseUrl, 'User-Agent': huyaSdkUa};
 
-  final BaseTarsHttp tupClient = BaseTarsHttp("http://wup.huya.com", "liveui", timeOut: 2, headers: requestHeaders);
+  final BaseTarsHttp tupClient = BaseTarsHttp(HuyaRequestParams.wupUrl, "liveui", timeOut: 2, headers: requestHeaders);
 
   static ({String popularity, String onlineViewers}) parseRoomAudience(Map<String, dynamic>? liveData) {
     final totalCount = liveData?['totalCount']?.toString().trim() ?? '';
@@ -325,17 +325,15 @@ class HuyaSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomRes
   Future<String> getPlayUrl(HuyaLineModel line, int bitRate) async {
     final capturedAntiCode = line.lineType == HuyaLineType.hls ? line.hlsAntiCode.trim() : line.flvAntiCode.trim();
     var antiCode = '';
-    var hasFreshToken = false;
 
-    // The room page can carry a token close to expiry. Lines 1/2 (the AL CDN)
-    // were observed to reject or close those URLs while TX/HS kept playing.
-    // Prefer the fresh WUP token introduced upstream, but retain the matching
-    // FLV/HLS page token as a direct fallback when WUP is unavailable.
-    try {
-      antiCode = (await getCndTokenInfoEx(line.streamName)).trim();
-      hasFreshToken = antiCode.isNotEmpty;
-    } catch (error) {
-      CoreLog.error('Huya fresh token failed for ${line.cdnType}: $error');
+    // This WUP response contains sFlvToken only. Prefer its native FLV
+    // credentials, and keep HLS on its own page-provided signing material.
+    if (line.lineType == HuyaLineType.flv) {
+      try {
+        antiCode = (await getCndTokenInfoEx(line.streamName)).trim();
+      } catch (error) {
+        CoreLog.error('Huya fresh token failed for ${line.cdnType}: $error');
+      }
     }
     if (antiCode.isEmpty) antiCode = capturedAntiCode;
     if (antiCode.isEmpty) {
@@ -344,13 +342,11 @@ class HuyaSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomRes
     }
 
     final capturedCodec = Uri(query: antiCode).queryParameters['codec']?.trim();
-    // 2.9.8, the last known-good Windows release, passed page tokens through.
-    // 3.0.7 began re-signing every captured token and is the first reported
-    // bad release. Only a fresh WUP template should be re-signed; otherwise
-    // preserve the CDN-issued page signature and merely normalize selection.
-    if (hasFreshToken) {
-      antiCode = buildAntiCode(line.streamName, line.presenterUid, antiCode);
-    }
+    // Both WUP and page responses can be templates (fm), not final playback
+    // signatures. Passing a template through can return an initial FLV burst
+    // then EOF, or an HLS playlist that becomes 403 at the captured expiry.
+    // buildAntiCode leaves opaque, already-signed tokens without fm intact.
+    antiCode = buildAntiCode(line.streamName, line.presenterUid, antiCode);
     antiCode = replaceQueryParameter(
       antiCode,
       'codec',
@@ -1109,7 +1105,11 @@ class HuyaSite implements LiveSite, LiveSiteRoomRefresher, LiveSiteRecordRoomRes
   }
 
   Future<List<LiveSuperChatMessage>> getHuyaSuperChatMessageList({required int lPid, bool first = false}) async {
-    final messageBoardClient = BaseTarsHttp("http://wup.huya.com", "wupui", headers: HuyaRequestParams.requestHeaders);
+    final messageBoardClient = BaseTarsHttp(
+      HuyaRequestParams.wupUrl,
+      "wupui",
+      headers: HuyaRequestParams.requestHeaders,
+    );
 
     final userId = HuyaUserId()..sHuYaUA = HuyaRequestParams.hysdkUa;
 
