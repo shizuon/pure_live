@@ -67,3 +67,16 @@ Actions，因此下载入口修正为实际可用的工作流页面，不公布�
 
 测试使用通道 mock 核验剪贴板，未运行或安装用户设备上的应用。新包的实际显示效果
 仍需用户对照，尤其是高刷新率屏幕上的拖影、普通页与小窗操作。
+
+## 源码同步与 Mac 云构建
+
+最终源码及下载入口修订已推送 `master` 与
+`fix/danmaku-interaction-macos-20261103`，构建提交
+`77b3031c2deb605a5cf14a1fff7ca48326a83f6c`。
+[Mac Run 41608073501](https://github.com/shizuon/pure_live/actions/runs/41608073501)
+已由 GitHub 接受并进入 Apple 构建任务，输入仅开启 build_macos；复用上述本地
+质量证据，create_release=false。此处记录的是启动状态，不代表编译成功或附件已生成。
+上一轮 Mac 构建约一小时，结果应以该 Run 的完成状态与附件为准；本机未安装或启动应用。
+
+Mac 产物将命名为 PureLive-3.1.3-4116-macos-universal.zip / .dmg 并附 SHA256。
+没有创建 3.1.3 Release，也没有把更新清单提升至尚未交付的新版本。
