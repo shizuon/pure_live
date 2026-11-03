@@ -7,7 +7,7 @@
   ],
   "version_desc": "3.1.2：Windows/macOS 弹幕小窗、点击弹幕复制正文、斗鱼启动后台续期，并修复虎牙取流签名与 FLV/HLS 凭据混用。平台交付状态见版本说明。",
   "prerelease": true,
-  "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.2",
+  "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
   "platforms": {
     "android": {
       "version": "3.1.1",
@@ -26,7 +26,7 @@
       "version_num": 301024115,
       "version_desc": "3.1.2 Windows x64：置顶弹幕小窗与原窗口恢复、点击弹幕复制正文、斗鱼启动续期、虎牙签名及协议凭据修复。实际验证范围见版本说明。",
       "prerelease": true,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.2",
+      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
       "windows_msix_available": false
     },
     "linux": {
@@ -43,7 +43,7 @@
       "version_num": 301024115,
       "version_desc": "3.1.2 Mac Universal：置顶弹幕小窗与原窗口恢复、点击弹幕复制正文、斗鱼启动续期、虎牙签名及协议凭据修复。实际验证范围见版本说明。",
       "prerelease": true,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.2"
+      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
     },
     "ios": {
       "version": "3.1.1",
