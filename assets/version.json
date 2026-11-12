@@ -1,57 +1,57 @@
 {
-  "version": "3.1.2",
-  "build_number": 4115,
-  "version_num": 301024115,
+  "version": "3.1.3",
+  "build_number": 4116,
+  "version_num": 301034116,
   "android_abis": [
     "arm64-v8a"
   ],
-  "version_desc": "3.1.2：Windows/macOS 弹幕小窗、点击弹幕复制正文、斗鱼启动后台续期，并修复虎牙取流签名与 FLV/HLS 凭据混用。平台交付状态见版本说明。",
-  "prerelease": true,
-  "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
+  "version_desc": "3.1.3：修复抖音分类层级、分页、主备线路与网页登录会话回退；减少双直播延迟弹幕定时器和轨道统计开销；保留桌面弹幕复制、右键菜单及 Mac 小窗改进。",
+  "prerelease": false,
+  "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.3",
   "platforms": {
     "android": {
-      "version": "3.1.1",
-      "build_number": 4114,
-      "version_num": 301014114,
-      "version_desc": "3.1.1 Android arm64候选；B站凭据恢复修订。无正式密钥时仅提供测试APK；构建和设备测试以记录为准。",
-      "prerelease": true,
-      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
+      "version": "3.1.3",
+      "build_number": 4116,
+      "version_num": 301034116,
+      "version_desc": "3.1.3：修复抖音分类层级、分页、主备线路与网页登录会话回退；减少双直播延迟弹幕定时器和轨道统计开销；保留桌面弹幕复制、右键菜单及 Mac 小窗改进。",
+      "prerelease": false,
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.3",
       "android_abis": [
         "arm64-v8a"
       ]
     },
     "windows": {
-      "version": "3.1.2",
-      "build_number": 4115,
-      "version_num": 301024115,
-      "version_desc": "3.1.2 Windows x64：置顶弹幕小窗与原窗口恢复、点击弹幕复制正文、斗鱼启动续期、虎牙签名及协议凭据修复。实际验证范围见版本说明。",
-      "prerelease": true,
-      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml",
+      "version": "3.1.3",
+      "build_number": 4116,
+      "version_num": 301034116,
+      "version_desc": "3.1.3：修复抖音分类层级、分页、主备线路与网页登录会话回退；减少双直播延迟弹幕定时器和轨道统计开销；保留桌面弹幕复制、右键菜单及 Mac 小窗改进。",
+      "prerelease": false,
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.3",
       "windows_msix_available": false
     },
     "linux": {
-      "version": "3.1.1",
-      "build_number": 4114,
-      "version_num": 301014114,
-      "version_desc": "3.1.1 Linux x64候选；B站可扫码，其他平台仍为高级会话入口。构建状态以记录为准。",
-      "prerelease": true,
-      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
+      "version": "3.1.3",
+      "build_number": 4116,
+      "version_num": 301034116,
+      "version_desc": "3.1.3：修复抖音分类层级、分页、主备线路与网页登录会话回退；减少双直播延迟弹幕定时器和轨道统计开销；保留桌面弹幕复制、右键菜单及 Mac 小窗改进。",
+      "prerelease": false,
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.3"
     },
     "macos": {
-      "version": "3.1.2",
-      "build_number": 4115,
-      "version_num": 301024115,
-      "version_desc": "3.1.2 Mac Universal：置顶弹幕小窗与原窗口恢复、点击弹幕复制正文、斗鱼启动续期、虎牙签名及协议凭据修复。实际验证范围见版本说明。",
-      "prerelease": true,
-      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
+      "version": "3.1.3",
+      "build_number": 4116,
+      "version_num": 301034116,
+      "version_desc": "3.1.3：修复抖音分类层级、分页、主备线路与网页登录会话回退；减少双直播延迟弹幕定时器和轨道统计开销；保留桌面弹幕复制、右键菜单及 Mac 小窗改进。",
+      "prerelease": false,
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.3"
     },
     "ios": {
-      "version": "3.1.1",
-      "build_number": 4114,
-      "version_num": 301014114,
-      "version_desc": "3.1.1 iOS/iPadOS普通未签名IPA候选，用户自行签名；真实登录和弹幕待设备验证。",
-      "prerelease": true,
-      "download_url": "https://github.com/shizuon/pure_live/actions/workflows/feature-build.yml"
+      "version": "3.1.3",
+      "build_number": 4116,
+      "version_num": 301034116,
+      "version_desc": "3.1.3：修复抖音分类层级、分页、主备线路与网页登录会话回退；减少双直播延迟弹幕定时器和轨道统计开销；保留桌面弹幕复制、右键菜单及 Mac 小窗改进。",
+      "prerelease": false,
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.3"
     }
   }
 }
