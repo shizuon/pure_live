@@ -11,10 +11,6 @@ class AreasListController extends ServerAllPageController<LiveArea> {
   final categories = <AppLiveCategory>[].obs;
   final Map<String, List<LiveArea>> _serverRawBackup = {};
 
-  List<LiveArea> _flattenRawAllData = [];
-
-  bool get isFlatten => site.id == Sites.douyinSite;
-
   AreasListController(this.site);
 
   @override
@@ -25,23 +21,14 @@ class AreasListController extends ServerAllPageController<LiveArea> {
 
     _serverRawBackup.clear();
 
-    if (isFlatten) {
-      _flattenRawAllData = channels.expand((e) => e.children).toList();
-      categories.assignAll(channels);
-      return _flattenRawAllData;
-    } else {
-      for (var cat in channels) {
-        _serverRawBackup[cat.id] = List.from(cat.children);
-      }
-      categories.assignAll(channels);
-      return _getCurrentTabAllChildren();
+    for (var cat in channels) {
+      _serverRawBackup[cat.id] = List.from(cat.children);
     }
+    categories.assignAll(channels);
+    return _getCurrentTabAllChildren();
   }
 
   List<LiveArea> _getCurrentTabAllChildren() {
-    if (isFlatten) {
-      return _flattenRawAllData;
-    }
     int activeIndex = tabIndex.value;
     if (activeIndex >= categories.length || categories.isEmpty) {
       return [];
@@ -57,7 +44,7 @@ class AreasListController extends ServerAllPageController<LiveArea> {
   /// reactive frames. Category contents are local at this point, so update the
   /// active slice synchronously and keep the finger-to-page transition linear.
   void selectCategory(int index) {
-    if (isFlatten || index < 0 || index >= categories.length || tabIndex.value == index) return;
+    if (index < 0 || index >= categories.length || tabIndex.value == index) return;
     tabIndex.value = index;
     currentPage = 1;
     processLocalPaging();
@@ -65,45 +52,6 @@ class AreasListController extends ServerAllPageController<LiveArea> {
 
   @override
   void processLocalPaging() {
-    if (isFlatten) {
-      final allItems = _flattenRawAllData;
-      totalCount.value = allItems.length;
-
-      if (allItems.isEmpty) {
-        list.clear();
-        canLoadMore.value = false;
-        pageEmpty.value = true;
-        finishRefreshControllers(IndicatorResult.noMore);
-        return;
-      }
-
-      if (usesDesktopPagination) {
-        int startIndex = (currentPage - 1) * pageSize.value;
-        if (startIndex >= allItems.length) {
-          currentPage = 1;
-          startIndex = 0;
-        }
-
-        int endIndex = startIndex + pageSize.value;
-        if (endIndex > allItems.length) endIndex = allItems.length;
-
-        final newData = allItems.sublist(startIndex, endIndex);
-        list.assignAll(newData);
-        canLoadMore.value = endIndex < allItems.length;
-        pageEmpty.value = list.isEmpty;
-        finishRefreshControllers(canLoadMore.value ? IndicatorResult.success : IndicatorResult.noMore);
-        if (currentPage == 1) {
-          scrollToTopImmediate();
-        }
-      } else {
-        list.assignAll(allItems);
-        canLoadMore.value = false;
-        pageEmpty.value = list.isEmpty;
-        finishRefreshControllers(IndicatorResult.noMore);
-      }
-      return;
-    }
-
     int activeIndex = tabIndex.value;
     if (categories.isEmpty || activeIndex >= categories.length) {
       list.clear();
@@ -141,7 +89,9 @@ class AreasListController extends ServerAllPageController<LiveArea> {
 
       final newData = allItems.sublist(startIndex, endIndex);
       list.assignAll(newData);
-      currentCategory.children.assignAll(newData);
+      currentCategory.children
+        ..clear()
+        ..addAll(newData);
       canLoadMore.value = endIndex < allItems.length;
       pageEmpty.value = list.isEmpty;
       if (currentPage == 1) {

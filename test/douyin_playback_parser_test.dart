@@ -60,6 +60,131 @@ void main() {
       expect(qualities.map((quality) => quality.selectionId), ['origin', 'hd']);
     });
 
+    test('retains main and backup routes in each quality and deduplicates legacy URLs', () {
+      final qualities = DouyinSite.parseStreamQualities({
+        'live_core_sdk_data': {
+          'pull_data': {
+            'stream_data': jsonEncode({
+              'data': {
+                'origin': {
+                  'main': {'flv': 'https://main.test/source.flv', 'hls': 'https://main.test/source.m3u8'},
+                  'backup': {'flv': 'https://backup.test/source.flv', 'hls': 'https://backup.test/source.m3u8'},
+                },
+                'hd': {
+                  'backup': {'flv': 'https://backup.test/hd.flv'},
+                },
+              },
+            }),
+          },
+        },
+        'flv_pull_url': {'origin': 'https://main.test/source.flv'},
+      });
+
+      expect(qualities.map((quality) => quality.selectionId), ['origin', 'hd']);
+      expect(qualities.first.data, [
+        'https://main.test/source.flv',
+        'https://main.test/source.m3u8',
+        'https://backup.test/source.flv',
+        'https://backup.test/source.m3u8',
+      ]);
+      expect(qualities.last.data, ['https://backup.test/hd.flv']);
+    });
+
+    test('merges modern and legacy aliases without dropping alternate CDN routes', () {
+      final qualities = DouyinSite.parseStreamQualities({
+        'live_core_sdk_data': {
+          'pull_data': {
+            'options': {
+              'qualities': [
+                {'name': '旧原画', 'sdk_key': 'ORIGION'},
+                {'name': '原画', 'sdk_key': 'origin'},
+              ],
+            },
+            'stream_data': jsonEncode({
+              'data': {
+                'origin': {
+                  'main': {'flv': 'https://main.test/source.flv'},
+                  'backup': {'flv': 'https://backup.test/source.flv'},
+                },
+                'uhd': {
+                  'main': {'flv': 'https://main.test/uhd.flv'},
+                },
+              },
+            }),
+          },
+        },
+        'flv_pull_url': {'ORIGION': 'https://main.test/source.flv', 'FULL_HD1': 'https://main.test/uhd.flv'},
+        'hls_pull_url_map': {'ORIGION': 'https://legacy.test/source.m3u8', 'FULL_HD1': 'https://legacy.test/uhd.m3u8'},
+      });
+
+      expect(qualities.map((quality) => quality.selectionId), ['origin', 'uhd']);
+      expect(qualities.map((quality) => quality.quality), ['原画', '蓝光']);
+      expect(qualities.first.data, [
+        'https://main.test/source.flv',
+        'https://backup.test/source.flv',
+        'https://legacy.test/source.m3u8',
+      ]);
+      expect(qualities.last.data, ['https://main.test/uhd.flv', 'https://legacy.test/uhd.m3u8']);
+    });
+
+    test('keeps one official top tier when FULL_HD1 points at origin', () {
+      final qualities = DouyinSite.parseStreamQualities({
+        'live_core_sdk_data': {
+          'pull_data': {
+            'options': {
+              'qualities': [
+                {'name': '蓝光', 'sdk_key': 'origin'},
+              ],
+            },
+            'stream_data': jsonEncode({
+              'data': {
+                'origin': {
+                  'main': {'flv': 'https://main.test/source.flv'},
+                  'backup': {'flv': 'https://backup.test/source.flv'},
+                },
+              },
+            }),
+          },
+        },
+        'flv_pull_url': {'FULL_HD1': 'https://main.test/source.flv'},
+        'hls_pull_url_map': {'FULL_HD1': 'https://legacy.test/source.m3u8'},
+      });
+
+      expect(qualities, hasLength(1));
+      expect(qualities.single.selectionId, 'origin');
+      expect(qualities.single.quality, '蓝光');
+      expect(qualities.single.data, [
+        'https://main.test/source.flv',
+        'https://backup.test/source.flv',
+        'https://legacy.test/source.m3u8',
+      ]);
+    });
+
+    test('keeps audio-only streams out of video quality choices', () {
+      final qualities = DouyinSite.parseStreamQualities({
+        'live_core_sdk_data': {
+          'pull_data': {
+            'stream_data': jsonEncode({
+              'data': {
+                'origin': {
+                  'main': {'flv': 'https://cdn.test/source.flv'},
+                },
+                'audio': {
+                  'main': {'flv': 'https://cdn.test/audio.flv', 'hls': 'https://cdn.test/audio.m3u8'},
+                },
+                'ao': {
+                  'main': {'flv': 'https://cdn.test/ao.flv', 'hls': 'https://cdn.test/ao.m3u8'},
+                },
+              },
+            }),
+          },
+        },
+        'flv_pull_url': {'AUDIO': 'https://cdn.test/legacy-audio.flv'},
+      });
+
+      expect(qualities.map((quality) => quality.selectionId), ['origin']);
+    });
+
     test('localizes SDK labels and ranks semantic tiers before instantaneous bitrate', () {
       final streamData = jsonEncode({
         'data': {

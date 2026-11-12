@@ -167,7 +167,7 @@ class DouyinSite implements LiveSite, LiveSiteRecordRoomResolver {
           typeName: category.name,
           areaType: category.id,
           areaPic: "",
-          areaName: category.name,
+          areaName: '全部',
           platform: Sites.douyinSite,
         ),
       );
@@ -197,8 +197,8 @@ class DouyinSite implements LiveSite, LiveSiteRecordRoomResolver {
       "browser_name": "Edge",
       "browser_version": "125.0.0.0",
       "browser_online": "true",
-      "count": '15',
-      "offset": ((page - 1) * 15).toString(),
+      "count": pageSize.toString(),
+      "offset": ((page - 1) * pageSize).toString(),
       "partition": partitionId,
       "partition_type": partitionType,
       "req_from": '2',
@@ -581,21 +581,24 @@ class DouyinSite implements LiveSite, LiveSiteRecordRoomResolver {
   /// 进入直播间前需要先获取cookie
   /// - [webRid] 直播间RID
   Future<String> _getWebCookie(String webRid) async {
-    var headResp = await HttpClient.instance.head("https://live.douyin.com/$webRid", header: headers);
-    var dyCookie = "";
+    final requestHeaders = await getRequestHeaders();
+    final cookies = <String, String>{};
+    for (final pair in (requestHeaders['cookie']?.toString() ?? '').split(';')) {
+      final separator = pair.indexOf('=');
+      if (separator <= 0) continue;
+      cookies[pair.substring(0, separator).trim()] = pair.substring(separator + 1).trim();
+    }
+    var headResp = await HttpClient.instance.head("https://live.douyin.com/$webRid", header: requestHeaders);
     headResp.headers["set-cookie"]?.forEach((element) {
-      var cookie = element.split(";")[0];
-      if (cookie.contains("ttwid")) {
-        dyCookie += "$cookie;";
-      }
-      if (cookie.contains("__ac_nonce")) {
-        dyCookie += "$cookie;";
-      }
-      if (cookie.contains("msToken")) {
-        dyCookie += "$cookie;";
+      final pair = element.split(';').first;
+      final separator = pair.indexOf('=');
+      if (separator <= 0) return;
+      final name = pair.substring(0, separator).trim();
+      if (const {'ttwid', '__ac_nonce', 'msToken'}.contains(name)) {
+        cookies.putIfAbsent(name, () => pair.substring(separator + 1).trim());
       }
     });
-    return dyCookie;
+    return cookies.entries.map((entry) => '${entry.key}=${entry.value}').join('; ');
   }
 
   /// 通过webRid获取直播间Web信息
@@ -711,19 +714,31 @@ class DouyinSite implements LiveSite, LiveSiteRecordRoomResolver {
       }
     }
 
+    final aliases = <String, List<String>>{};
+    for (final key in descriptors.keys) {
+      aliases.putIfAbsent(_douyinQualityKey(key), () => []).add(key);
+    }
+
     final qualities = <LivePlayQuality>[];
-    for (final entry in descriptors.entries) {
-      final key = entry.key;
-      final descriptor = entry.value;
+    for (final entry in aliases.entries) {
+      final key = descriptors.containsKey(entry.key) ? entry.key : entry.value.first;
+      if (key == 'ao' || key == 'audio') continue;
+      final descriptor = descriptors[key]!;
       final urls = <String>[];
       final stream = _caseInsensitiveMapValue(decodedStreams, key);
       final main = stream is Map ? stream['main'] : null;
-      if (main is Map) {
-        _addPlayableUrl(urls, main['flv']);
-        _addPlayableUrl(urls, main['hls']);
+      for (final alias in [key, ...entry.value.where((alias) => alias != key)]) {
+        final aliasStream = _caseInsensitiveMapValue(decodedStreams, alias);
+        for (final route in const ['main', 'backup']) {
+          final source = aliasStream is Map ? aliasStream[route] : null;
+          if (source is Map) {
+            _addPlayableUrl(urls, source['flv']);
+            _addPlayableUrl(urls, source['hls']);
+          }
+        }
+        _addPlayableUrl(urls, _caseInsensitiveMapValue(flvMap, alias));
+        _addPlayableUrl(urls, _caseInsensitiveMapValue(hlsMap, alias));
       }
-      _addPlayableUrl(urls, _caseInsensitiveMapValue(flvMap, key));
-      _addPlayableUrl(urls, _caseInsensitiveMapValue(hlsMap, key));
       if (urls.isEmpty) continue;
 
       final configuredName = descriptor['name']?.toString().trim() ?? '';
@@ -770,16 +785,25 @@ class DouyinSite implements LiveSite, LiveSiteRecordRoomResolver {
       return rank != 0 ? rank : left.selectionId.toString().compareTo(right.selectionId.toString());
     });
 
-    // Platform aliases can expose the same actual URL under both legacy
-    // (`FULL_HD1`) and modern (`uhd`) keys. Presenting both would claim a
-    // quality change even though the player receives an identical source.
-    final seenStreams = <String>{};
-    return qualities
-        .where((quality) {
-          final urls = (quality.data as List).map((url) => url.toString()).toList()..sort();
-          return seenStreams.add(urls.join('\u0000'));
-        })
-        .toList(growable: false);
+    // Some rooms publish their top tier as origin while the legacy map calls
+    // that same source FULL_HD1. Keep its official label and all CDN routes.
+    final distinctQualities = <LivePlayQuality>[];
+    for (final quality in qualities) {
+      final urls = (quality.data as List).cast<String>();
+      final existingIndex = distinctQualities.indexWhere((existing) => (existing.data as List).any(urls.contains));
+      if (existingIndex < 0) {
+        distinctQualities.add(quality);
+        continue;
+      }
+      final existing = distinctQualities[existingIndex];
+      distinctQualities[existingIndex] = LivePlayQuality(
+        quality: existing.quality,
+        id: existing.id,
+        sort: existing.sort,
+        data: List<String>.unmodifiable({...existing.data as List<String>, ...urls}),
+      );
+    }
+    return distinctQualities;
   }
 
   static Map<dynamic, dynamic> _decodeSdkParams(dynamic raw) {
@@ -811,13 +835,22 @@ class DouyinSite implements LiveSite, LiveSiteRecordRoomResolver {
     urls.add(url);
   }
 
-  static int _douyinQualityRank(String key) => switch (key.toUpperCase()) {
-    'ORIGION' || 'ORIGIN' => 6000000,
-    'FULL_HD1' || 'UHD' => 5000000,
-    'HD1' || 'HD' => 4000000,
-    'SD2' || 'SD' => 3000000,
-    'SD1' || 'LD' => 2000000,
-    'MD' => 1000000,
+  static String _douyinQualityKey(String key) => switch (key.toLowerCase()) {
+    'origion' => 'origin',
+    'full_hd1' => 'uhd',
+    'hd1' => 'hd',
+    'sd2' => 'sd',
+    'sd1' => 'ld',
+    final value => value,
+  };
+
+  static int _douyinQualityRank(String key) => switch (_douyinQualityKey(key)) {
+    'origin' => 6000000,
+    'uhd' => 5000000,
+    'hd' => 4000000,
+    'sd' => 3000000,
+    'ld' => 2000000,
+    'md' => 1000000,
     _ => 0,
   };
 
