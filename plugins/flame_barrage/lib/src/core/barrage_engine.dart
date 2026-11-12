@@ -401,7 +401,7 @@ class BarrageEngine extends FlameGame with TapCallbacks {
     _metricTimer += elapsed;
     if (_metricTimer >= 0.032) {
       _metricTimer = 0.0;
-      _updateTrackMetrics(nowMs);
+      _trackManager.updateMetrics(_activeEntries, screenWidth: size.x, now: nowMs);
     }
 
     _suspendLoopIfIdle();
@@ -496,46 +496,6 @@ class BarrageEngine extends FlameGame with TapCallbacks {
     track.activeCount++;
     _activeEntries.add(mockEntry);
     _currentAliveCount++;
-  }
-
-  void _updateTrackMetrics(int now) {
-    final entryLen = _activeEntries.length;
-
-    for (final track in _trackManager.tracks) {
-      double totalSpeed = 0.0;
-      int count = 0;
-      BarrageEntry? youngestEntry;
-
-      for (int i = 0; i < entryLen; i++) {
-        final entry = _activeEntries[i];
-        if (!entry.active) continue;
-        if (entry.track == track.index) {
-          totalSpeed += entry.speed;
-          count++;
-          if (youngestEntry == null || entry.x > youngestEntry.x) {
-            youngestEntry = entry;
-          }
-        }
-      }
-      track.activeCount = count;
-      track.avgSpeed = count == 0 ? 0.0 : totalSpeed / count;
-      track.density = size.x > 0 ? (count * 150.0) / size.x : 0.0;
-      if (youngestEntry != null) {
-        track.lastRight = youngestEntry.x + youngestEntry.width;
-        track.lastEntry = youngestEntry;
-      } else {
-        if (!track.locked) {
-          track.lastRight = 0.0;
-          track.lastEntry = null;
-        }
-        if (track.locked && now >= track.lockedUntil) {
-          track.locked = false;
-          track.lockedUntil = 0;
-          track.lastRight = 0.0;
-          track.lastEntry = null;
-        }
-      }
-    }
   }
 
   void recycleComponent(BarrageEntry entry) {

@@ -24,6 +24,7 @@ class CommentaryDanmakuDelayQueue<T> {
 
   final Queue<_PendingDanmaku<T>> _pending = Queue<_PendingDanmaku<T>>();
   Timer? _timer;
+  DateTime? _scheduledDueAt;
   int _delayMs = 0;
   bool _disposed = false;
 
@@ -56,6 +57,7 @@ class CommentaryDanmakuDelayQueue<T> {
   void clear() {
     _timer?.cancel();
     _timer = null;
+    _scheduledDueAt = null;
     _pending.clear();
   }
 
@@ -65,22 +67,27 @@ class CommentaryDanmakuDelayQueue<T> {
   }
 
   void _scheduleNext() {
-    _timer?.cancel();
-    _timer = null;
-    if (_pending.isEmpty || _disposed) return;
-
+    if (_disposed) return;
     _drainDueMessages();
-    if (_pending.isEmpty || _disposed) return;
+    if (_pending.isEmpty || _disposed) {
+      _timer?.cancel();
+      _timer = null;
+      _scheduledDueAt = null;
+      return;
+    }
 
     final dueAt = _pending.first.receivedAt.add(Duration(milliseconds: _delayMs));
+    // Appending messages usually leaves the next deadline unchanged.
+    if (_timer?.isActive == true && _scheduledDueAt == dueAt) return;
+    _timer?.cancel();
     final remaining = dueAt.difference(_now());
+    _scheduledDueAt = dueAt;
     _timer = _timerFactory(remaining.isNegative ? Duration.zero : remaining, _handleTimer);
   }
 
   void _handleTimer() {
     _timer = null;
-    if (_disposed) return;
-    _drainDueMessages();
+    _scheduledDueAt = null;
     _scheduleNext();
   }
 

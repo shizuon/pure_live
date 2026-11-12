@@ -1,9 +1,129 @@
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pure_live/modules/live_play/service/commentary_danmaku_delay_queue.dart';
 
 void main() {
   group('commentary danmaku delay queue', () {
+    test('a burst shares one timer and emits every message in order', () {
+      fakeAsync((async) {
+        final emitted = <int>[];
+        final start = DateTime(2026);
+        var timersCreated = 0;
+        final queue = CommentaryDanmakuDelayQueue<int>(
+          onEmit: emitted.add,
+          now: () => start.add(async.elapsed),
+          timerFactory: (duration, callback) {
+            timersCreated++;
+            return Timer(duration, callback);
+          },
+        );
+
+        queue.updateOffset(500);
+        for (var i = 0; i < 1000; i++) {
+          queue.add(i);
+        }
+        expect(timersCreated, 1);
+        expect(queue.pendingCount, 1000);
+        async.elapse(const Duration(milliseconds: 499));
+        expect(emitted, isEmpty);
+        async.elapse(const Duration(milliseconds: 1));
+        expect(emitted, List<int>.generate(1000, (index) => index));
+        expect(queue.pendingCount, 0);
+        expect(timersCreated, 1);
+        queue.dispose();
+      });
+    });
+
+    test('later arrivals keep the first deadline and schedule the next batch', () {
+      fakeAsync((async) {
+        final emitted = <int>[];
+        final start = DateTime(2026);
+        var timersCreated = 0;
+        final queue = CommentaryDanmakuDelayQueue<int>(
+          onEmit: emitted.add,
+          now: () => start.add(async.elapsed),
+          timerFactory: (duration, callback) {
+            timersCreated++;
+            return Timer(duration, callback);
+          },
+        );
+
+        queue.updateOffset(500);
+        queue.add(1);
+        async.elapse(const Duration(milliseconds: 100));
+        queue.add(2);
+        queue.add(3);
+        expect(timersCreated, 1);
+        async.elapse(const Duration(milliseconds: 400));
+        expect(emitted, [1]);
+        expect(timersCreated, 2);
+        async.elapse(const Duration(milliseconds: 99));
+        expect(emitted, [1]);
+        async.elapse(const Duration(milliseconds: 1));
+        expect(emitted, [1, 2, 3]);
+        expect(timersCreated, 2);
+        queue.dispose();
+      });
+    });
+
+    test('dropping a full queue head moves the timer to the retained deadline', () {
+      fakeAsync((async) {
+        final emitted = <int>[];
+        final start = DateTime(2026);
+        var timersCreated = 0;
+        final queue = CommentaryDanmakuDelayQueue<int>(
+          onEmit: emitted.add,
+          now: () => start.add(async.elapsed),
+          maxPendingMessages: 2,
+          timerFactory: (duration, callback) {
+            timersCreated++;
+            return Timer(duration, callback);
+          },
+        );
+
+        queue.updateOffset(500);
+        queue.add(1);
+        async.elapse(const Duration(milliseconds: 100));
+        queue.add(2);
+        async.elapse(const Duration(milliseconds: 100));
+        queue.add(3);
+        expect(timersCreated, 2);
+        expect(queue.pendingCount, 2);
+        async.elapse(const Duration(milliseconds: 399));
+        expect(emitted, isEmpty);
+        async.elapse(const Duration(milliseconds: 1));
+        expect(emitted, [2]);
+        async.elapse(const Duration(milliseconds: 100));
+        expect(emitted, [2, 3]);
+        queue.dispose();
+      });
+    });
+
+    test('clearing and changing to zero cancel shared timers', () {
+      fakeAsync((async) {
+        final emitted = <int>[];
+        final start = DateTime(2026);
+        final queue = CommentaryDanmakuDelayQueue<int>(onEmit: emitted.add, now: () => start.add(async.elapsed));
+
+        queue.updateOffset(500);
+        queue.add(1);
+        queue.add(2);
+        queue.clear();
+        queue.add(3);
+        queue.add(4);
+        queue.updateOffset(0);
+        expect(emitted, [3, 4]);
+        expect(queue.pendingCount, 0);
+        queue.add(5);
+        async.elapse(const Duration(seconds: 1));
+        expect(emitted, [3, 4, 5]);
+        expect(async.nonPeriodicTimerCount, 0);
+        queue.dispose();
+      });
+    });
+
     test('positive offset delays messages by the selected stream offset', () {
       fakeAsync((async) {
         final emitted = <int>[];

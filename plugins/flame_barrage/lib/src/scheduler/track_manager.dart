@@ -1,4 +1,5 @@
 import '../core/barrage_config.dart';
+import '../model/barrage/barrage_entry.dart';
 import '../model/barrage/barrage_track.dart';
 
 class TrackManager {
@@ -44,5 +45,38 @@ class TrackManager {
     _lastHeight = -1.0;
     _lastMaxTracks = -1;
     initialize(config, screenHeight);
+  }
+
+  void updateMetrics(Iterable<BarrageEntry> entries, {required double screenWidth, required int now}) {
+    for (final track in _tracks) {
+      track.activeCount = 0;
+      track.avgSpeed = 0;
+    }
+
+    // Group entries in one pass. Track indices stay contiguous after resize;
+    // entries from lanes that have disappeared are excluded until recycled.
+    for (final entry in entries) {
+      if (!entry.active || entry.track < 0 || entry.track >= _tracks.length) continue;
+      final track = _tracks[entry.track];
+      if (track.activeCount == 0 || entry.x > track.lastEntry!.x) {
+        track.lastEntry = entry;
+        track.lastRight = entry.x + entry.width;
+      }
+      track.activeCount++;
+      track.avgSpeed += entry.speed;
+    }
+
+    for (final track in _tracks) {
+      final count = track.activeCount;
+      track.density = screenWidth > 0 ? (count * 150.0) / screenWidth : 0.0;
+      if (count > 0) {
+        track.avgSpeed /= count;
+      } else if (!track.locked || now >= track.lockedUntil) {
+        track.locked = false;
+        track.lockedUntil = 0;
+        track.lastRight = 0;
+        track.lastEntry = null;
+      }
+    }
   }
 }
