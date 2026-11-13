@@ -30,7 +30,7 @@
 
 `3.1.2` 为 Windows 和 Mac 加入带弹幕的小窗播放，支持置顶、拖动、缩放和恢复原窗口；斗鱼在每次启动后后台尝试续期 Cookie。首次需在应用内完成斗鱼登录以保留长期凭据，续期失败会在账号页显示状态。本轮还修复虎牙取流签名与 FLV / HLS 凭据混用。画面与侧栏弹幕可单击复制正文，顶部标题栏不再遮挡前两行弹幕的点击。[本轮说明与验证记录](docs/DESKTOP_PIP_DOUYU_REFRESH_2026_11_02.md)。
 
-`3.1.4` 修复双直播缓冲后的同步漂移、macOS 帧交付阻塞及硬解回退参数，增加按需诊断。本轮提供 macOS Universal DMG 与 ZIP；其他平台继续使用已有版本。详见 [v3.1.4 Release](https://github.com/shizuon/pure_live/releases/tag/v3.1.4) 和[验证记录](docs/SYNC_MACOS_2026_11_13.md)。
+`3.1.4` 修复双直播缓冲后的同步漂移、macOS 帧交付阻塞及硬解回退参数，增加按需诊断。本轮提供 Windows、macOS、Linux 与 iOS 安装包，Android 正式签名继续暂缓。详见 [v3.1.4 Release](https://github.com/shizuon/pure_live/releases/tag/v3.1.4) 和[验证记录](docs/SYNC_MACOS_2026_11_13.md)。
 
 macOS 是目前已经实际验证的目标平台；Windows、iOS / iPadOS 已开放迁移测试。进入直播间 A 后，可以从关注列表选择一个在线直播间 B 作为解说源：**A 继续负责画面、标题、画质和线路，B 负责声音。**
 

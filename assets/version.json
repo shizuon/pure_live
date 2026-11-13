@@ -21,21 +21,21 @@
       ]
     },
     "windows": {
-      "version": "3.1.3",
-      "build_number": 4116,
-      "version_num": 301034116,
-      "version_desc": "3.1.3：修复抖音分类层级、分页、主备线路与网页登录会话回退；减少双直播延迟弹幕定时器和轨道统计开销；保留桌面弹幕复制、右键菜单及 Mac 小窗改进。",
+      "version": "3.1.4",
+      "build_number": 4117,
+      "version_num": 301044117,
+      "version_desc": "3.1.4：修复双流缓冲后的同步漂移、macOS 帧交付阻塞与硬解回退参数；补齐按需播放诊断。",
       "prerelease": false,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.3",
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.4",
       "windows_msix_available": false
     },
     "linux": {
-      "version": "3.1.3",
-      "build_number": 4116,
-      "version_num": 301034116,
-      "version_desc": "3.1.3：修复抖音分类层级、分页、主备线路与网页登录会话回退；减少双直播延迟弹幕定时器和轨道统计开销；保留桌面弹幕复制、右键菜单及 Mac 小窗改进。",
+      "version": "3.1.4",
+      "build_number": 4117,
+      "version_num": 301044117,
+      "version_desc": "3.1.4：修复双流缓冲后的同步漂移、macOS 帧交付阻塞与硬解回退参数；补齐按需播放诊断。",
       "prerelease": false,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.3"
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.4"
     },
     "macos": {
       "version": "3.1.4",
@@ -46,12 +46,12 @@
       "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.4"
     },
     "ios": {
-      "version": "3.1.3",
-      "build_number": 4116,
-      "version_num": 301034116,
-      "version_desc": "3.1.3：修复抖音分类层级、分页、主备线路与网页登录会话回退；减少双直播延迟弹幕定时器和轨道统计开销；保留桌面弹幕复制、右键菜单及 Mac 小窗改进。",
+      "version": "3.1.4",
+      "build_number": 4117,
+      "version_num": 301044117,
+      "version_desc": "3.1.4：修复双流缓冲后的同步漂移、macOS 帧交付阻塞与硬解回退参数；补齐按需播放诊断。",
       "prerelease": false,
-      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.3"
+      "download_url": "https://github.com/shizuon/pure_live/releases/tag/v3.1.4"
     }
   }
 }

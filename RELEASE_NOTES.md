@@ -11,7 +11,7 @@
 
 ## 下载与验证范围
 
-本次提供 **macOS Universal DMG / ZIP**，同时支持 Apple Silicon 与 Intel。采用 ad-hoc 签名，未做 Apple 公证。其他平台继续使用已有版本，Android 正式签名继续暂缓。
+本次提供 Windows x64 EXE / ZIP、macOS Universal DMG / ZIP、Linux x64 TAR.GZ，以及 iOS arm64 自签 IPA、TrollStore IPA 与未签名应用 ZIP。macOS 同时支持 Apple Silicon 与 Intel，采用 ad-hoc 签名，未做 Apple 公证。Android 正式签名继续暂缓。iOS 自签包需要自行签名，TrollStore 包需要兼容设备与系统。
 
 修复候选已在虎牙 CSBOY-Mo（蓝光30M）与抖音玩机器双流实播：两路 VideoToolbox 硬解，固定偏移后最小化约 130 秒再恢复，比赛倒计时差保持在 0–1 秒。另一轮 150 秒前后台测试的内部时钟误差为 -33 至 -17 ms。详见 [实播与根因记录](docs/SYNC_MACOS_2026_11_13.md)。
 
