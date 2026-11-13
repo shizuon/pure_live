@@ -25,6 +25,89 @@ import 'package:pure_live/player/models/player_state.dart';
 import 'package:rxdart/rxdart.dart' show BehaviorSubject;
 
 void main() {
+  test('on-demand sync snapshot identifies a pending native resume after video starts', () async {
+    final primary = _SyncPlayer(position: const Duration(seconds: 30));
+    final companion = _SyncPlayer(position: const Duration(seconds: 27));
+    final pool = PlayerPool(factory: (_) async => companion);
+    final controller = CommentarySyncController(
+      primaryManager: _PlayerManager(primary: primary, pool: pool),
+      playerPool: pool,
+      platformSupportProbe: () => true,
+      resolver: const _Resolver(),
+    );
+    addTearDown(controller.dispose);
+    await controller.activate(
+      videoRoom: LiveRoom(roomId: 'a', platform: 'test'),
+      audioRoom: LiveRoom(roomId: 'b', platform: 'test'),
+      primaryVolume: .6,
+    );
+    fakeAsync((clock) {
+      primary.pendingPlay = Completer<void>();
+      unawaited(controller.setOffset(-500));
+      clock.elapse(const Duration(milliseconds: 500));
+      expect(primary.isPlayingNow, isTrue);
+      expect(controller.readSyncDiagnostics(), containsPair('offset-stage', 'resume-A'));
+      clock.elapse(const Duration(seconds: 5));
+      final pending = controller.readSyncDiagnostics();
+      expect(pending['status'], 'calibrating');
+      expect(pending['offset-pending'], 'true');
+      expect(pending['requested-offset-ms'], '-500');
+      expect(pending['applied-offset-ms'], '0');
+      primary.pendingPlay!.complete();
+      clock.flushMicrotasks();
+      final completed = controller.readSyncDiagnostics();
+      expect(completed['status'], 'active');
+      expect(completed['offset-stage'], 'idle');
+      expect(completed['offset-pending'], 'false');
+      expect(completed['applied-offset-ms'], '-500');
+      expect(completed['offset-stage-ms'], '0');
+    });
+  });
+
+  test('primary buffering preserves the calibrated gap and resumes drift correction', () async {
+    final opened = <String>[];
+    final primary = _SyncPlayer(position: const Duration(seconds: 30));
+    final companion = _SyncPlayer(position: const Duration(seconds: 27), onOpen: opened.add);
+    final pool = PlayerPool(factory: (_) async => companion);
+    final controller = CommentarySyncController(
+      primaryManager: _PlayerManager(primary: primary, pool: pool),
+      playerPool: pool,
+      platformSupportProbe: () => true,
+      resolver: const _Resolver(),
+    );
+    addTearDown(controller.dispose);
+    await controller.activate(
+      videoRoom: LiveRoom(roomId: 'a', platform: 'test'),
+      audioRoom: LiveRoom(roomId: 'b', platform: 'test'),
+      primaryVolume: .6,
+    );
+    fakeAsync((clock) {
+      unawaited(controller.setOffset(12800));
+      clock.elapse(const Duration(milliseconds: 12800));
+    });
+    primary._currentPosition = const Duration(seconds: 60);
+    companion._currentPosition = const Duration(milliseconds: 44200);
+    expect(controller.state.value.offsetMs, 12800);
+    final pauses = companion.pauseCount;
+
+    for (var recovery = 0; recovery < 2; recovery++) {
+      primary._loading.add(true);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(companion.playbackRates.last, 1);
+      companion._currentPosition += const Duration(milliseconds: 600);
+      primary._loading.add(false);
+      await Future<void>.delayed(const Duration(seconds: 7));
+      expect(companion.playbackRates.last, .98, reason: 'the existing baseline must retain drift caused by an A stall');
+      expect(controller.state.value.offsetMs, 12800);
+      expect(companion.pauseCount, pauses, reason: 'the user offset is already applied');
+      expect(opened, hasLength(1));
+    }
+
+    companion._currentPosition = const Duration(milliseconds: 44200);
+    await Future<void>.delayed(const Duration(milliseconds: 2100));
+    expect(companion.playbackRates.last, 1);
+  });
+
   test('large delay configures both caches before pausing and exit restores the main cache', () async {
     final primary = _SyncPlayer(position: const Duration(seconds: 30));
     final companion = _SyncPlayer(position: const Duration(seconds: 27));
@@ -921,7 +1004,7 @@ class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer, CommentaryBufferC
   final VoidCallback? onBufferingRead;
   final bool simulatePauseBuffering;
 
-  final Duration _currentPosition;
+  Duration _currentPosition;
   final BehaviorSubject<bool> _playing = BehaviorSubject.seeded(true);
   final BehaviorSubject<bool> _loading = BehaviorSubject.seeded(false);
   int pauseCount = 0;
@@ -931,8 +1014,10 @@ class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer, CommentaryBufferC
   bool? sourceAudioOnly;
   final List<bool> audioOnlyModes = [];
   final List<Duration> bufferReservations = [];
+  final List<double> playbackRates = [1];
   int bufferRestores = 0;
   bool failBufferReservation = false;
+  Completer<void>? pendingPlay;
   @override
   Future<void> reserveSyncBuffer(Duration retainedDelay) async {
     if (failBufferReservation) throw StateError('native option unavailable');
@@ -972,6 +1057,7 @@ class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer, CommentaryBufferC
   Future<void> play() async {
     if (simulatePauseBuffering) _loading.add(false);
     _playing.add(true);
+    await pendingPlay?.future;
   }
 
   @override
@@ -1003,7 +1089,7 @@ class _SyncPlayer implements UnifiedPlayer, SyncCapablePlayer, CommentaryBufferC
   }
 
   @override
-  Future<void> setPlaybackRate(double rate) async {}
+  Future<void> setPlaybackRate(double rate) async => playbackRates.add(rate);
 
   @override
   Widget getVideoWidget(BoxFit fit) => const SizedBox.expand(key: ValueKey('test-companion-video'));

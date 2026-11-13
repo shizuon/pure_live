@@ -40,9 +40,9 @@ class MacosDecoderStatus {
   }
 }
 
-/// mpv's `hwdec-software-fallback=no` prevents *runtime* fallback, but initial
-/// unsupported codecs may still open a software decoder. Refuse to continue
-/// that playback in strict mode. Property-change driven, not frame polling.
+/// Verify the actual decoder in addition to `vd-lavc-software-fallback=no`.
+/// Refuse unexpected software playback in strict mode. Property-change driven,
+/// not frame polling.
 class MacosHardwareDecodeGuard {
   MacosHardwareDecodeGuard({required this.native, required this.pause, required this.onRejected});
 

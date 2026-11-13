@@ -75,7 +75,6 @@ class CommentarySyncController
   bool _transportPausedByUser = false;
   bool _stoppingPrimary = false;
   bool _primaryReloading = false;
-  bool _primaryWasBuffering = false;
   bool _handlingCompanionFailure = false;
   bool _commentaryAudioSelected = false;
   bool _previewTrackChanging = false;
@@ -86,6 +85,8 @@ class CommentarySyncController
   Timer? _driftTimer;
   Timer? _bufferReconnectTimer;
   Future<void>? _offsetWork;
+  String _offsetStage = 'idle';
+  final Stopwatch _offsetStageClock = Stopwatch();
   Future<void> _audioTransitionTail = Future<void>.value();
   Completer<void>? _offsetDelayCancellation;
   final List<StreamSubscription<dynamic>> _companionSubscriptions = [];
@@ -175,6 +176,38 @@ class CommentarySyncController
   bool get isPlaying => sessionPlaying;
   double get outputVolume => state.value.outputVolume;
   UnifiedPlayer? get companionPreviewPlayer => _companion;
+
+  /// Read only when the user requests a playback snapshot. No native calls or
+  /// recurring diagnostic work are needed to identify a pending calibration.
+  Map<String, String> readSyncDiagnostics() {
+    final video = _primarySync;
+    final audio = _companionSync;
+    final errorMs = video == null || audio == null
+        ? null
+        : (audio.currentPosition - video.currentPosition).inMicroseconds / 1000 -
+              CommentarySyncMath.desiredGapMs(baselineGapMs: _baselineGapMs, offsetMs: _appliedOffsetMs);
+    return {
+      'status': state.value.status.name,
+      'offset-stage': _offsetStage,
+      'offset-stage-ms': '${_offsetStageClock.elapsedMilliseconds}',
+      'offset-pending': '${_offsetWork != null}',
+      'requested-offset-ms': '$_requestedOffsetMs',
+      'applied-offset-ms': '$_appliedOffsetMs',
+      'clock-error-ms': errorMs?.toStringAsFixed(1) ?? '—',
+      'drift-check-pending': '$_checkingDrift',
+      'primary-reloading': '$_primaryReloading',
+    };
+  }
+
+  void _setOffsetStage(String stage) {
+    _offsetStage = stage;
+    _offsetStageClock.reset();
+    if (stage == 'idle') {
+      _offsetStageClock.stop();
+    } else {
+      _offsetStageClock.start();
+    }
+  }
 
   Future<void> activate({required LiveRoom videoRoom, required LiveRoom audioRoom, double? primaryVolume}) async {
     if (!isSupported) {
@@ -416,6 +449,7 @@ class CommentarySyncController
     // limit) can finish the drain and clear it.
     final work = Future<void>.microtask(_drainOffsetRequests);
     _offsetWork = work;
+    _setOffsetStage('queued');
     return work;
   }
 
@@ -447,6 +481,7 @@ class CommentarySyncController
             break;
           }
         }
+        _setOffsetStage('restore-B-rate');
         await _setCompanionRate(1);
         final player = delta > 0 ? _companion : primaryManager.currentPlayer;
         if (player == null || _transportPausedByUser) break;
@@ -460,6 +495,7 @@ class CommentarySyncController
       }
     } finally {
       _offsetWork = null;
+      _setOffsetStage('idle');
       if (generation == _generation && isActive) {
         final pending = _requestedOffsetMs != _appliedOffsetMs;
         state.value = state.value.copyWith(
@@ -486,8 +522,10 @@ class CommentarySyncController
       // Track before awaiting so exit can enqueue restore after an in-flight
       // native configuration. Never seek/reopen either stream for this change.
       _bufferPlayers.addAll([primaryBuffer, companionBuffer]);
+      _setOffsetStage('reserve-A-buffer');
       await primaryBuffer.reserveSyncBuffer(Duration(milliseconds: primaryMs));
       if (generation != _generation || _manualStop) return false;
+      _setOffsetStage('reserve-B-buffer');
       await companionBuffer.reserveSyncBuffer(Duration(milliseconds: companionMs));
       if (generation != _generation || _manualStop) return false;
       _bufferProtectionActive = true;
@@ -500,11 +538,14 @@ class CommentarySyncController
 
   Future<bool> _pauseFor(UnifiedPlayer player, Duration duration, {required int generation}) async {
     if (!player.isPlayingNow || _transportPausedByUser) return false;
+    final slot = identical(player, _companion) ? 'B' : 'A';
+    _setOffsetStage('pause-$slot');
     await player.pause();
     var completedNormally = false;
     final cancellation = Completer<void>();
     _offsetDelayCancellation = cancellation;
     try {
+      _setOffsetStage('hold-$slot');
       await Future.any([
         Future<void>.delayed(duration).then((_) {
           completedNormally = true;
@@ -519,6 +560,7 @@ class CommentarySyncController
       if (((generation == _generation && !_manualStop) || ownsPrimary) &&
           !_transportPausedByUser &&
           !_stoppingPrimary) {
+        _setOffsetStage('resume-$slot');
         await player.play();
       }
     }
@@ -683,36 +725,13 @@ class CommentarySyncController
     if (!isActive || _primaryReloading || _offsetWork != null || _transportPausedByUser || _mobileVideoTransition) {
       return;
     }
-    if (loading) {
-      _primaryWasBuffering = true;
-      _consecutiveDriftSamples = 0;
-      unawaited(_setCompanionRate(1));
-      return;
-    }
-    if (_primaryWasBuffering) {
-      _primaryWasBuffering = false;
-      unawaited(_rebaselineAfterPrimaryBuffer());
-    }
-  }
-
-  Future<void> _rebaselineAfterPrimaryBuffer() async {
-    final generation = _generation;
-    try {
-      await _waitUntilStable(generation: generation, stableFor: const Duration(milliseconds: 500));
-    } catch (_) {
-      return;
-    }
-    if (generation != _generation || !isActive || _primaryReloading || _offsetWork != null) return;
-    final video = _primarySync;
-    final audio = _companionSync;
-    if (video == null || audio == null) return;
-    final actualGapMs = (audio.currentPosition - video.currentPosition).inMicroseconds / 1000;
-    // The already-applied user offset is part of the current gap. Adding it
-    // back yields the new zero-offset baseline without applying the offset a
-    // second time after a short primary-player buffer.
-    _baselineGapMs = actualGapMs + _appliedOffsetMs;
+    // A buffer pause leaves both media timelines intact. Keep the calibrated
+    // gap so the drift monitor can recover any time lost by the primary.
     _consecutiveDriftSamples = 0;
-    _startDriftMonitor();
+    _driftDirection = 0;
+    if (loading) {
+      unawaited(_setCompanionRate(1));
+    }
   }
 
   void _startDriftMonitor() {
@@ -1050,7 +1069,6 @@ class CommentarySyncController
     _companionRate = 1;
     _transportPausedByUser = false;
     _primaryReloading = false;
-    _primaryWasBuffering = false;
     _handlingCompanionFailure = false;
     _commentaryAudioSelected = false;
     _previewTrackChanging = false;

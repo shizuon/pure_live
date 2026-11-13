@@ -6,6 +6,8 @@ class PlaybackDiagnostics {
   final Map<String, String?> values;
   static const properties = [
     'time-pos',
+    'audio-pts',
+    'avsync',
     'demuxer-cache-duration',
     'paused-for-cache',
     'pause',
@@ -27,7 +29,8 @@ class PlaybackDiagnostics {
             return MapEntry(key, value == 'yes' || value == 'no' ? value : null);
           }
           final number = double.tryParse(value);
-          return MapEntry(key, number != null && number.isFinite && number >= 0 ? value : null);
+          final signed = key == 'avsync' || key == 'audio-pts';
+          return MapEntry(key, number != null && number.isFinite && (signed || number >= 0) ? value : null);
         } catch (_) {
           return MapEntry<String, String?>(key, null);
         }

@@ -9,7 +9,7 @@
 | 模式 | 视频解码 | 画面输出 | 失败行为 |
 | --- | --- | --- | --- |
 | 软解（默认） | CPU，`hwdec=no` | 原有软件输出 | 保持 3.0.19 的兼容策略 |
-| 硬解 only | VideoToolbox，`hwdec=videotoolbox` | 插件现有 OpenGL 硬件输出 | 禁止运行时软解回退；发现起播实际用了软解后暂停并报错 |
+| 硬解 only | VideoToolbox，`hwdec=videotoolbox` | 插件现有 OpenGL 硬件输出 | 禁止起播和运行时软解回退；实际解码器检查发现软解时暂停并报错 |
 | 硬解兼容 | VideoToolbox 回拷，`hwdec=videotoolbox-copy` | 原有软件输出 | 允许回退到 CPU 解码 |
 
 首次创建播放器前可以直接选择。播放器已经创建后，更改、导入或重置配置都只影响下次启动：需要**完全退出应用再打开**，仅关闭直播间或刷新不算重启。界面同时显示已保存选项与本次运行模式，避免把待生效设置当成当前状态。A、B 和多画面共用本次运行模式，不会在更换 B 时混用新旧配置。
@@ -28,7 +28,7 @@
 
 状态读取只在点击时进行，没有常驻轮询。硬解 only 额外监听原生解码器／视频参数的变化，合并检查任务，等待已有视频输出参数后才判断；换流、切音频、退出时使旧检查失效，退出释放监听与计时器。
 
-mpv 的 `hwdec` 是请求值，不能用来证明实际硬解。`hwdec-software-fallback=no` 也不足以排除不受支持编码在起播时选择软件解码器。因此严格模式还检查 `hwdec-current`，发现实际软解后不继续播放。这个检查发生在解码器起播之后，**不保证起播过程中连一帧软件解码都没有发生**。选纯硬解不能增加芯片对编码格式的支持。[mpv 硬解选项](https://mpv.io/manual/stable/#options-hwdec)、[实际解码器属性](https://mpv.io/manual/stable/#property-list-hwdec-current)。
+`hwdec` 设置请求的解码方式，`hwdec-current` 返回实际解码器。严格模式设置 `vd-lavc-software-fallback=no`，禁止起播和运行期间转入软件解码；额外的实际解码器检查发现软解时会暂停并报错。不受 VideoToolbox 支持的编码需要更换直播画质或使用兼容模式。[mpv 0.36.0 解码器实现](https://github.com/mpv-player/mpv/blob/v0.36.0/video/decode/vd_lavc.c)、[实际解码器属性](https://mpv.io/manual/stable/#property-list-hwdec-current)。
 
 ## 测试时看什么
 

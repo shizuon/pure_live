@@ -13,6 +13,7 @@ import 'package:pure_live/modules/settings/widgets/macos_decode_settings.dart';
 import 'package:pure_live/player/adapters/media_kit_adapter.dart';
 import 'package:pure_live/player/models/macos_decode_mode.dart';
 import 'package:pure_live/player/utils/macos_decoder_status.dart';
+import 'package:pure_live/player/utils/playback_diagnostics.dart';
 
 class _NativeProperties {
   final values = <String, String>{};
@@ -103,13 +104,14 @@ void main() {
       final native = _NativeProperties();
       await MediaKitAdapter.applyNativeLiveProperties(native);
       expect(native.values['ao'], 'auto');
-      expect(native.values['hwdec-software-fallback'], Platform.isMacOS ? mode.softwareFallback : '1');
+      expect(native.values['vd-lavc-software-fallback'], Platform.isMacOS ? mode.softwareFallback : '1');
       if (Platform.isMacOS) {
         expect(native.values['hwdec'], mode.hwdec);
         settings.changeMacosDecodeMode(MacosDecodeMode.software);
         final nextPlayer = _NativeProperties();
         await MediaKitAdapter.applyNativeLiveProperties(nextPlayer);
         expect(nextPlayer.values['hwdec'], mode.hwdec); // B retains A's session policy.
+        expect(nextPlayer.values['vd-lavc-software-fallback'], mode.softwareFallback);
       } else {
         expect(native.values.containsKey('hwdec'), isFalse);
       }
@@ -123,6 +125,7 @@ void main() {
     final settings = _WidgetSettings();
     expect(settings.activeMacosDecodeMode, MacosDecodeMode.software);
     var reads = 0;
+    var syncReads = 0;
     await tester.pumpWidget(
       GetMaterialApp(
         home: Scaffold(
@@ -132,9 +135,17 @@ void main() {
               readStatus: () async {
                 reads++;
                 return {
-                  'A': const MacosDecoderStatus(MacosDecoderState.hardware, decoder: 'videotoolbox'),
+                  'A': const MacosDecoderStatus(
+                    MacosDecoderState.hardware,
+                    decoder: 'videotoolbox',
+                    diagnostics: PlaybackDiagnostics({'audio-pts': '12.25', 'avsync': '-0.125'}),
+                  ),
                   'B': const MacosDecoderStatus(MacosDecoderState.audioOnly),
                 };
+              },
+              readSyncStatus: () {
+                syncReads++;
+                return {'offset-stage': 'resume-A', 'offset-pending': 'true'};
               },
             ),
           ),
@@ -151,14 +162,19 @@ void main() {
     expect(settings.activeMacosDecodeMode, MacosDecodeMode.software);
     expect(find.text('macos_decode_restart'), findsOneWidget);
     expect(reads, 0);
+    expect(syncReads, 0);
     await tester.ensureVisible(find.byKey(const ValueKey('decode-read-status')));
     await tester.tap(find.byKey(const ValueKey('decode-read-status')));
     await tester.pumpAndSettle();
     expect(reads, 1);
+    expect(syncReads, 1);
     expect(find.textContaining('videotoolbox'), findsOneWidget);
     expect(find.text('macos_decode_status_audioOnly'), findsOneWidget);
+    expect(find.textContaining('audio-pts: 12.25s · avsync: -0.125s'), findsOneWidget);
+    expect(find.textContaining('offset-stage: resume-A'), findsOneWidget);
     await tester.pump(const Duration(seconds: 30));
     expect(reads, 1);
+    expect(syncReads, 1);
     await tester.pumpWidget(const SizedBox());
   });
 }

@@ -38,6 +38,9 @@ public class VideoOutput: NSObject {
   private var textureId: Int64 = -1
   private var currentSize: CGSize = CGSize.zero
   private var disposed: Bool = false
+  private let updateLock = NSLock()
+  private var updatePending = false
+  private var notificationPending = false
 
   init(
     handle: Int64,
@@ -118,11 +121,9 @@ public class VideoOutput: NSObject {
       )
     }
 
-    DispatchQueue.main.sync { [weak self]() in
-      guard let that = self else {
-        return
-      }
-      that.registerTextureId()
+    DispatchQueue.main.async {
+      // Registration completes before the last owner can dispose this output.
+      self.registerTextureId()
     }
   }
 
@@ -145,8 +146,22 @@ public class VideoOutput: NSObject {
   }
 
   public func updateCallback() {
-    worker.enqueue {
-      self._updateCallback()
+    updateLock.lock()
+    if updatePending {
+      updateLock.unlock()
+      return
+    }
+    updatePending = true
+    updateLock.unlock()
+
+    // mpv exposes the latest frame. Keep at most one waiting render when
+    // callbacks arrive faster than the renderer can consume them.
+    worker.enqueue { [weak self] in
+      guard let that = self else { return }
+      that.updateLock.lock()
+      that.updatePending = false
+      that.updateLock.unlock()
+      that._updateCallback()
     }
   }
 
@@ -161,7 +176,7 @@ public class VideoOutput: NSObject {
       currentSize = size
 
       texture.resize(size)
-      DispatchQueue.main.sync { [weak self] in
+      DispatchQueue.main.async { [weak self] in
         guard let that = self else { return }
         // textureUpdateCallback must run on the main thread
         that.textureUpdateCallback(that.textureId, size)
@@ -173,8 +188,25 @@ public class VideoOutput: NSObject {
     }
 
     texture.render(size)
-    DispatchQueue.main.sync { [weak self] in
+    notifyFrameAvailable()
+  }
+
+  private func notifyFrameAvailable() {
+    updateLock.lock()
+    if notificationPending {
+      updateLock.unlock()
+      return
+    }
+    notificationPending = true
+    updateLock.unlock()
+
+    // The render thread must not wait for the platform thread: Dart can be
+    // calling libmpv there. Flutter will consume the newest published frame.
+    DispatchQueue.main.async { [weak self] in
       guard let that = self else { return }
+      that.updateLock.lock()
+      that.notificationPending = false
+      that.updateLock.unlock()
       // Textures must be marked as available from the main thread
       that.registry.textureFrameAvailable(that.textureId)
     }

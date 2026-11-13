@@ -63,13 +63,11 @@ class MediaKitAdapter implements UnifiedPlayer, MediaKitPlayerAccessor, SyncCapa
 
     await native.setProperty('network-timeout', '15');
 
-    // Ask mpv to abandon a broken hardware decoder after the first consecutive
-    // frame failure. This preserves the low-power fast path on compatible
-    // devices while making unsupported profiles fall back to software instead
-    // of leaving a black Surface behind. mpv's larger default can skip several
-    // live packets before the fallback is attempted. Mac strict mode opts out.
+    // Use the decoder option supported by the bundled libmpv. Compatible
+    // modes fall back after one failed frame; Mac strict mode disables both
+    // startup and runtime software fallback.
     await native.setProperty(
-      'hwdec-software-fallback',
+      'vd-lavc-software-fallback',
       PlatformUtils.isMacOS ? SettingsService.to.player.activeMacosDecodeMode.softwareFallback : '1',
     );
 

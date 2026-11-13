@@ -4,10 +4,11 @@ import 'package:pure_live/player/models/macos_decode_mode.dart';
 import 'package:pure_live/player/utils/macos_decoder_status.dart';
 
 class MacosDecodeSettings extends StatefulWidget {
-  const MacosDecodeSettings({super.key, required this.settings, required this.readStatus});
+  const MacosDecodeSettings({super.key, required this.settings, required this.readStatus, this.readSyncStatus});
 
   final PlayerSettingsController settings;
   final Future<Map<String, MacosDecoderStatus>> Function() readStatus;
+  final Map<String, String>? Function()? readSyncStatus;
 
   @override
   State<MacosDecodeSettings> createState() => _MacosDecodeSettingsState();
@@ -15,14 +16,21 @@ class MacosDecodeSettings extends StatefulWidget {
 
 class _MacosDecodeSettingsState extends State<MacosDecodeSettings> {
   Map<String, MacosDecoderStatus>? _status;
+  Map<String, String>? _syncStatus;
   bool _reading = false;
 
   Future<void> _refresh() async {
     if (_reading) return;
     setState(() => _reading = true);
     try {
+      final syncStatus = widget.readSyncStatus?.call();
       final status = await widget.readStatus();
-      if (mounted) setState(() => _status = status);
+      if (mounted) {
+        setState(() {
+          _status = status;
+          _syncStatus = syncStatus;
+        });
+      }
     } finally {
       if (mounted) setState(() => _reading = false);
     }
@@ -98,9 +106,17 @@ class _MacosDecodeSettingsState extends State<MacosDecodeSettings> {
                   if (entry.value.codec.isNotEmpty) entry.value.codec,
                   if (entry.value.diagnostics case final d?)
                     '\n${i18n('playback_diagnostic_snapshot', args: {'position': d.number('time-pos'), 'cache': d.number('demuxer-cache-duration'), 'buffering': d.values['paused-for-cache'] ?? '—', 'paused': d.values['pause'] ?? '—', 'eof': d.values['eof-reached'] ?? '—', 'speed': d.number('speed'), 'decode': d.number('decoder-frame-drop-count', digits: 0), 'output': d.number('frame-drop-count', digits: 0)})}',
+                  if (entry.value.diagnostics case final d?)
+                    '\naudio-pts: ${d.number('audio-pts')}s · avsync: ${d.number('avsync', digits: 3)}s',
                 ].join(' · '),
               ),
             ),
+        if (_syncStatus case final sync?)
+          ListTile(
+            dense: true,
+            title: Text(i18n('commentary_sync_settings')),
+            subtitle: Text(sync.entries.map((entry) => '${entry.key}: ${entry.value}').join('\n')),
+          ),
         if (_status != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),

@@ -83,7 +83,15 @@ class PlayerKernelSettingsPage extends GetView<SettingsService> {
             ),
           ]),
           if (PlatformUtils.isMacOS)
-            MacosDecodeSettings(settings: SettingsService.to.player, readStatus: _readMacosDecoderStatus),
+            MacosDecodeSettings(
+              settings: SettingsService.to.player,
+              readStatus: _readMacosDecoderStatus,
+              readSyncStatus: () {
+                final service = GlobalPlayerService.instance;
+                if (!service.initialized || !service.commentarySyncController.isEngaged) return null;
+                return service.commentarySyncController.readSyncDiagnostics();
+              },
+            ),
           Obx(() {
             String activeKey = SettingsService.to.player.videoPlayerKey.v;
             if (PlayerConsts.engines[activeKey] != PlayerEngine.mediaKit) {
